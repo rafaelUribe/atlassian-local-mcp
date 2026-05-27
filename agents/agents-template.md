@@ -1,8 +1,42 @@
 # AI Agent Context — [REPO NAME]
 
 > Local-only file. Never committed.
-> Managed automatically by Step 0 below (adds `.agents/` to `.git/info/exclude`).
 > Source: [atlassian-local-mcp](https://github.com/rafaelUribe/atlassian-local-mcp)
+
+---
+
+## ⚡ DO THIS NOW — Mandatory Self-Setup
+
+> **Execute immediately after reading this file. Do not wait for a user command.**
+
+Run these commands in the repo root before doing anything else:
+
+**Linux / macOS / Git Bash:**
+```bash
+mkdir -p .agents
+grep -qxF '.agents/' .git/info/exclude 2>/dev/null || echo '.agents/' >> .git/info/exclude
+grep -qxF 'agents.md' .git/info/exclude 2>/dev/null || echo 'agents.md' >> .git/info/exclude
+grep -qxF '.env' .git/info/exclude 2>/dev/null || echo '.env' >> .git/info/exclude
+grep -qxF 'mcp.info' .git/info/exclude 2>/dev/null || echo 'mcp.info' >> .git/info/exclude
+echo "✓ Self-setup complete"
+```
+
+**Windows (PowerShell):**
+```powershell
+if (-not (Test-Path .agents)) { New-Item -ItemType Directory -Path .agents | Out-Null }
+$exclude = '.git\info\exclude'
+if (-not (Test-Path $exclude)) { New-Item -ItemType File -Path $exclude -Force | Out-Null }
+$content = Get-Content $exclude -ErrorAction SilentlyContinue
+@('.agents/', 'agents.md', '.env', 'mcp.info') | ForEach-Object {
+  if ($content -notcontains $_) { Add-Content $exclude $_ }
+}
+Write-Host "✓ Self-setup complete"
+```
+
+This is **idempotent** — safe to run every time, does nothing if already set up.
+
+After running, confirm to the user:
+> ✓ Local agent infrastructure ready. `.agents/` created and git-excluded.
 
 ---
 
@@ -81,40 +115,10 @@ Automates steps 1-3, prints the proposal, and waits for stdin confirmation befor
 
 > **ACTIVATION:** Triggered by commands like `"Start ticket [TICKET_ID]"` or `"Work on [TICKET_ID]"`.
 
-### Step 0 — Self-Setup (run once per repo, idempotent)
+### Step 0 — Self-Setup (already done at load time, verify only)
 
-Before doing anything else, verify the local agent infrastructure exists in this repo:
-
-1. **Check if `.agents/` directory exists.** If not, create it:
-   ```bash
-   mkdir -p .agents
-   ```
-2. **Check `.git/info/exclude` for required entries.** If any are missing, append them:
-   ```bash
-   # Entries to ensure (one per line):
-   # .agents/
-   # .env
-   # mcp.info
-   grep -qxF '.agents/' .git/info/exclude 2>/dev/null || echo '.agents/' >> .git/info/exclude
-   grep -qxF '.env' .git/info/exclude 2>/dev/null || echo '.env' >> .git/info/exclude
-   grep -qxF 'mcp.info' .git/info/exclude 2>/dev/null || echo 'mcp.info' >> .git/info/exclude
-   ```
-   On Windows (PowerShell):
-   ```powershell
-   if (-not (Test-Path .agents)) { New-Item -ItemType Directory -Path .agents | Out-Null }
-   $exclude = '.git\info\exclude'
-   $entries = @('.agents/', '.env', 'mcp.info')
-   if (-not (Test-Path $exclude)) { New-Item -ItemType File -Path $exclude -Force | Out-Null }
-   $content = Get-Content $exclude -ErrorAction SilentlyContinue
-   foreach ($e in $entries) {
-     if ($content -notcontains $e) { Add-Content $exclude $e }
-   }
-   ```
-3. **Confirm these workflow settings** (configured in MCP server `.env`, injected here automatically):
-   - **Base Branches:** {{BASE_BRANCHES}}
-   - **Branch Prefix:** `{{BRANCH_PREFIX}}`
-   - To change these, update `BASE_BRANCHES` and `BRANCH_PREFIX` in the MCP's `.env` file (or use the MCP UI → Configuration).
-4. **This step is idempotent** — safe to run every time. If everything already exists, it does nothing.
+The mandatory self-setup runs automatically when this file is first read (see top section).
+If `.agents/` does not exist for any reason, re-run the setup commands from the top of this file before continuing.
 
 ### Step 1 — File Verification (cache-first)
 
