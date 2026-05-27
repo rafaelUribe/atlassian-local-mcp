@@ -629,7 +629,7 @@ const TOOLS = [
   // ── Meta ─────────────────────────────────────────────────────────────────────
   {
     name: 'mcp_get_agent_context',
-    description: 'Returns the agents-template.md content — workflow instructions for AI agents (Confluence docs workflow, ticket init, progress logging, git conventions). Call this at the start of every session to load context.',
+    description: 'CALL THIS FIRST when the user says "Start ticket [ID]" or "Work on [ID]". Returns the complete workflow: how to fetch Jira context, search Confluence, create git branches, and generate the .agents/ context file. Must be called before any ticket initialization.',
     inputSchema: {
       type: 'object',
       properties: {}

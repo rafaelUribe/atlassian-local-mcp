@@ -61,7 +61,7 @@
           <input type="text" id="ticket-input" placeholder="RWD-1234">
           <button type="button" id="btn-copy-prompt">Copy Prompt</button>
         </div>
-        <p class="hint">Paste this into your Copilot agent chat to bootstrap the ticket context:</p>
+        <p class="hint">Paste into your Copilot agent chat. The agent will call <code>mcp_get_agent_context</code> automatically — that tool returns the full workflow (Jira fetch, Confluence search, git branch setup, context file creation).</p>
         <pre id="prompt-output" class="prompt-preview"></pre>
       </div>
     </section>

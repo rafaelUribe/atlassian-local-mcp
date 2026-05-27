@@ -86,17 +86,24 @@ document.getElementById('btn-health').addEventListener('click', async () => {
 
 // ── Prompt Builder ──────────────────────────────────────────────────────────
 function buildPrompt(ticketId) {
-  return `Call the MCP tool "mcp_get_agent_context" to load the full workflow instructions, then initialize ticket ${ticketId}. Follow the steps in the returned context to fetch Jira details, search Confluence for related docs, set up the git branch, and create the .agents/${ticketId}.md context file.`;
+  return `Start ticket ${ticketId}`;
 }
 
 function updatePromptPreview() {
-  const ticket = document.getElementById('ticket-input').value.trim() || 'RWD-XXXX';
-  document.getElementById('prompt-output').textContent = buildPrompt(ticket);
+  const ticket = document.getElementById('ticket-input').value.trim().toUpperCase();
+  const output = document.getElementById('prompt-output');
+  if (!ticket) {
+    output.textContent = '';
+    output.style.display = 'none';
+    return;
+  }
+  output.style.display = '';
+  output.textContent = buildPrompt(ticket);
 }
 
 document.getElementById('ticket-input').addEventListener('input', updatePromptPreview);
 document.getElementById('btn-copy-prompt').addEventListener('click', () => {
-  const ticket = document.getElementById('ticket-input').value.trim();
+  const ticket = document.getElementById('ticket-input').value.trim().toUpperCase();
   if (!ticket) { document.getElementById('ticket-input').focus(); return; }
   const prompt = buildPrompt(ticket);
   navigator.clipboard.writeText(prompt).then(() => {
@@ -106,8 +113,8 @@ document.getElementById('btn-copy-prompt').addEventListener('click', () => {
   });
 });
 
-// Show default preview on load
-updatePromptPreview();
+// Hide preview initially
+document.getElementById('prompt-output').style.display = 'none';
 
 // ── Configuration — Base Branches ───────────────────────────────────────────
 let baseBranches = [];
