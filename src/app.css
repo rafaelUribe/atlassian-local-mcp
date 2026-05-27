@@ -419,6 +419,7 @@ input:focus, textarea:focus {
 /* -- Cache tab -- */
 .cache-toolbar { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-bottom: 1.5rem; }
 .cache-toolbar input { min-width: 160px; }
+.toolbar-status { font-size: 0.85rem; color: var(--text-dim); }
 
 .ticket-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 1rem; overflow: hidden; }
 .ticket-card-header { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1.1rem; cursor: pointer; user-select: none; }

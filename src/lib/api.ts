@@ -16,7 +16,16 @@ export async function toolCall<T = { content: { text: string }[] }>(
   name: string,
   args: Record<string, unknown> = {}
 ): Promise<T> {
-  return rpcCall<T>('tools/call', { name, arguments: args });
+  const result = await rpcCall<{ isError?: boolean; content: { type: string; text: string }[] }>('tools/call', { name, arguments: args });
+  if (result.isError) throw new Error(result.content?.[0]?.text || `Tool ${name} failed`);
+  return result as unknown as T;
+}
+
+export async function getMyJiraTickets(): Promise<{ key: string; summary: string; status: string }[]> {
+  const res = await fetch(`${BASE}/api/jira/my-tickets`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data.issues ?? [];
 }
 
 // ── REST helpers ──────────────────────────────────────────────────────────────

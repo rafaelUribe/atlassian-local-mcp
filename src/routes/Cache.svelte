@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { getCachedTickets, getBitbucketRepos, toolCall, pinRepos } from '../lib/api';
+  import { getCachedTickets, getBitbucketRepos, toolCall, pinRepos, getMyJiraTickets } from '../lib/api';
   import { workspaceRepos } from '../lib/stores';
   import type { CachedTicketSummary } from '../lib/types';
 
@@ -10,8 +10,10 @@
   let indexInput = '';
   let indexing = false;
   let syncing = false;
+  let loadingMy = false;
   let indexStatus = '';
   let syncStatus = '';
+  let myStatus = '';
   // pinnedRepos[ticketId] = array of manually pinned repo slugs
   let localPinned: Record<string, string[]> = {};
 
@@ -41,6 +43,31 @@
     } finally {
       indexing = false;
       setTimeout(() => { indexStatus = ''; }, 4000);
+    }
+  }
+
+  async function loadMyTickets() {
+    loadingMy = true;
+    myStatus = 'Fetching assigned tickets…';
+    try {
+      const issues = await getMyJiraTickets();
+      if (!issues.length) { myStatus = 'No assigned in-progress tickets found.'; return; }
+      myStatus = `Found ${issues.length} ticket(s) — indexing…`;
+      let done = 0, failed = 0;
+      for (const issue of issues) {
+        try {
+          await toolCall('mcp_index_ticket', { ticketId: issue.key });
+          done++;
+          myStatus = `Indexed ${done}/${issues.length}…`;
+        } catch { failed++; }
+      }
+      await loadTickets();
+      myStatus = `✓ ${done} indexed${failed ? `, ${failed} failed` : ''}`;
+    } catch (err: unknown) {
+      myStatus = `✗ ${err instanceof Error ? err.message : String(err)}`;
+    } finally {
+      loadingMy = false;
+      setTimeout(() => { myStatus = ''; }, 6000);
     }
   }
 
@@ -116,8 +143,12 @@
   <button class="secondary" on:click={syncAll} disabled={syncing}>
     {syncing ? 'Syncing…' : '↻ Sync Active Tickets'}
   </button>
-  {#if indexStatus}<span style="font-size:0.85rem;color:var(--text-dim)">{indexStatus}</span>{/if}
-  {#if syncStatus}<span style="font-size:0.85rem;color:var(--text-dim)">{syncStatus}</span>{/if}
+  <button class="secondary" on:click={loadMyTickets} disabled={loadingMy}>
+    {loadingMy ? myStatus : '👤 Load My Tickets'}
+  </button>
+  {#if indexStatus}<span class="toolbar-status">{indexStatus}</span>{/if}
+  {#if syncStatus}<span class="toolbar-status">{syncStatus}</span>{/if}
+  {#if myStatus && !loadingMy}<span class="toolbar-status">{myStatus}</span>{/if}
 </div>
 
 {#if tickets.length === 0}
