@@ -224,6 +224,8 @@ button.small { padding: 0.25rem 0.6rem; font-size: 0.78rem; }
   background: var(--surface2);
 }
 .debug-count { font-size: 0.78rem; color: var(--text-dim); white-space: nowrap; }
+.filter-badge { font-size: 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 0.1rem 0.4rem; color: var(--accent); margin-left: 0.4rem; }
+.filter-badge.muted { color: var(--text-dim); }
 .debug-list li {
   display: flex;
   align-items: center;

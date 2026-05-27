@@ -41,7 +41,7 @@
 
   async function testBitbucketRepos() {
     bbLoading = true; bbError = '';
-    try { bbRepos = await getBitbucketRepos(); }
+    try { bbRepos = await getBitbucketRepos(bitbucketProjects.length ? bitbucketProjects : undefined); }
     catch (e: unknown) { bbError = e instanceof Error ? e.message : String(e); }
     finally { bbLoading = false; }
   }
@@ -198,7 +198,14 @@
 
     <div class="debug-section">
       <div class="debug-header">
-        <span>Repos (current project filter)</span>
+        <span>
+          Repos
+          {#if bitbucketProjects.length}
+            <span class="filter-badge">{bitbucketProjects.join(', ')}</span>
+          {:else}
+            <span class="filter-badge muted">no filter — all repos</span>
+          {/if}
+        </span>
         <button type="button" class="secondary small" on:click={testBitbucketRepos} disabled={bbLoading}>
           {bbLoading ? 'Loading…' : '↺ Load'}
         </button>

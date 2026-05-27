@@ -53,8 +53,9 @@ export async function getCachedTickets(): Promise<import('./types').CachedTicket
   return res.json();
 }
 
-export async function getBitbucketRepos(): Promise<{ slug: string; name: string; project?: string }[]> {
-  const res = await fetch(`${BASE}/api/bitbucket/repos`);
+export async function getBitbucketRepos(projects?: string[]): Promise<{ slug: string; name: string; project?: string }[]> {
+  const q = projects && projects.length ? `?projects=${projects.join(',')}` : '';
+  const res = await fetch(`${BASE}/api/bitbucket/repos${q}`);
   return res.json();
 }
 
