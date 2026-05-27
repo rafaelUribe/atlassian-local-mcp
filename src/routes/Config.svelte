@@ -134,6 +134,10 @@
     <label>HTTP Port
       <input type="number" bind:value={fields.HTTP_PORT} placeholder="3847" />
     </label>
+    <label>Bitbucket Workspace <span class="optional">optional</span>
+      <input type="text" bind:value={fields.BITBUCKET_WORKSPACE} placeholder="your-workspace-slug" />
+      <small>Found in: <code>bitbucket.org/<strong>this-part</strong>/...</code></small>
+    </label>
   </div>
   {/if}
 
@@ -153,11 +157,7 @@
 
   {#if activeTab === 'bitbucket'}
   <div class="config-section">
-    <h2>Bitbucket Settings</h2>
-    <label>Workspace <span class="optional">optional</span>
-      <input type="text" bind:value={fields.BITBUCKET_WORKSPACE} placeholder="your-workspace-slug" />
-      <small>Found in: <code>bitbucket.org/<strong>this-part</strong>/...</code></small>
-    </label>
+    <h2>Bitbucket Projects</h2>
 
     {#if bitbucketProjects.length}
       <div class="branch-config">
