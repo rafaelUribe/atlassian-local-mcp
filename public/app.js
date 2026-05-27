@@ -44,7 +44,8 @@ document.getElementById('btn-health').addEventListener('click', async () => {
   document.getElementById('quick-output').textContent = JSON.stringify(data, null, 2);
 });
 
-// ── Configuration — .env ────────────────────────────────────────────────────document.getElementById('form-env').addEventListener('submit', async (e) => {
+// ── Configuration — .env ────────────────────────────────────────────────────
+document.getElementById('form-env').addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = e.target;
   const data = Object.fromEntries(new FormData(form));
