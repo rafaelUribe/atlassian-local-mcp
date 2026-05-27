@@ -110,16 +110,10 @@ Before doing anything else, verify the local agent infrastructure exists in this
      if ($content -notcontains $e) { Add-Content $exclude $e }
    }
    ```
-3. **Create `.agents/config.json` if it doesn't exist** (project-specific settings):
-   ```json
-   {
-     "baseBranches": ["develop", "test"],
-     "branchPrefix": "task/"
-   }
-   ```
-   - `baseBranches`: branches to pull before starting work (in order). **Adjust per project** (e.g. `["main"]`, `["develop", "staging"]`).
-   - `branchPrefix`: prefix for new feature branches (e.g. `task/`, `feature/`, `bugfix/`).
-   - If the file already exists, do not overwrite it.
+3. **Confirm these workflow settings** (configured in MCP server `.env`, injected here automatically):
+   - **Base Branches:** {{BASE_BRANCHES}}
+   - **Branch Prefix:** `{{BRANCH_PREFIX}}`
+   - To change these, update `BASE_BRANCHES` and `BRANCH_PREFIX` in the MCP's `.env` file (or use the MCP UI → Configuration).
 4. **This step is idempotent** — safe to run every time. If everything already exists, it does nothing.
 
 ### Step 1 — File Verification (cache-first)
@@ -145,15 +139,17 @@ Create `.agents/[TICKET_ID].md` with this structured data.
 
 ### Step 4 — Git Automation (requires confirmation)
 
-**Read `.agents/config.json`** to get `baseBranches` and `branchPrefix`. If the file doesn't exist or is missing fields, use defaults: `baseBranches = ["develop", "test"]`, `branchPrefix = "task/"`.
+**Use the configured branches and prefix:**
+- **Base Branches:** {{BASE_BRANCHES}}
+- **Branch Prefix:** `{{BRANCH_PREFIX}}`
 
 **Before executing any git command, present the plan to the user and ask for explicit confirmation:**
 
 ```
 I will perform the following git operations:
   1. Stash uncommitted changes (if any)
-  2. Pull latest from: [list baseBranches from config]
-  3. [Create / Switch to] branch {branchPrefix}[TICKET_ID]
+  2. Pull latest from: {{BASE_BRANCHES}}
+  3. [Create / Switch to] branch {{BRANCH_PREFIX}}[TICKET_ID]
 
 Proceed? (y/n)
 ```
@@ -165,16 +161,16 @@ Proceed? (y/n)
 git status --porcelain
 # If dirty: git stash push -m "auto-stash before [TICKET_ID]"
 
-# 2. Sync base branches (from config.baseBranches)
-# For each branch in baseBranches:
+# 2. Sync base branches: {{BASE_BRANCHES}}
+# For each branch in the list:
 #   git checkout <branch> && git pull
 #   (skip silently if branch doesn't exist locally or remotely)
 
-# 3. Branch control (using config.branchPrefix, default "task/")
-# If {branchPrefix}[TICKET_ID] already exists locally or remotely:
-git checkout {branchPrefix}[TICKET_ID] && git merge <first baseBranch>
+# 3. Branch control (prefix: {{BRANCH_PREFIX}})
+# If {{BRANCH_PREFIX}}[TICKET_ID] already exists locally or remotely:
+git checkout {{BRANCH_PREFIX}}[TICKET_ID] && git merge <first base branch>
 # If it does NOT exist:
-git checkout <first baseBranch> && git checkout -b {branchPrefix}[TICKET_ID]
+git checkout <first base branch> && git checkout -b {{BRANCH_PREFIX}}[TICKET_ID]
 ```
 
 If the user declines, skip git operations and proceed to Step 5 with the context already loaded.

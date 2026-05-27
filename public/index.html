@@ -10,7 +10,7 @@
   <nav>
     <div class="nav-brand">⚡ Atlassian MCP</div>
     <div class="nav-links">
-      <a href="#" data-tab="dashboard" class="active">Dashboard</a>
+      <a href="#" data-tab="dashboard">Dashboard</a>
       <a href="#" data-tab="config">Configuration</a>
       <a href="#" data-tab="tools">Tools</a>
       <a href="#" data-tab="ai">AI Assistant</a>
@@ -23,7 +23,7 @@
 
   <main>
     <!-- Dashboard -->
-    <section id="tab-dashboard" class="tab-content active">
+    <section id="tab-dashboard" class="tab-content">
       <h1>Dashboard</h1>
       <div class="cards">
         <div class="card">
@@ -79,29 +79,20 @@
             <input type="text" name="BITBUCKET_WORKSPACE" placeholder="your-workspace-slug">
             <small>Found in: bitbucket.org/<strong>{this-part}</strong></small>
           </label>
+          <label>Base Branches
+            <input type="text" name="BASE_BRANCHES" placeholder="develop, test">
+            <small>Comma-separated list of base branches for PRs</small>
+          </label>
+          <label>Branch Prefix
+            <input type="text" name="BRANCH_PREFIX" placeholder="task/">
+            <small>Prefix for new feature branches (e.g. task/, feature/)</small>
+          </label>
           <label>HTTP_PORT
             <input type="number" name="HTTP_PORT" placeholder="3847" value="3847">
           </label>
           <div class="form-actions">
             <button type="submit">Save .env</button>
             <span id="env-status"></span>
-          </div>
-        </form>
-      </div>
-
-      <div class="config-section">
-        <h2>Per-Project Settings (.agents/config.json)</h2>
-        <p class="hint">These are stored in your working repo's <code>.agents/config.json</code>. Excluded from git.</p>
-        <form id="form-project">
-          <label>Base Branches (comma-separated)
-            <input type="text" name="baseBranches" placeholder="develop, test" value="develop, test">
-          </label>
-          <label>Branch Prefix
-            <input type="text" name="branchPrefix" placeholder="task/" value="task/">
-          </label>
-          <div class="form-actions">
-            <button type="button" id="btn-copy-config">Copy config.json to clipboard</button>
-            <span id="config-status"></span>
           </div>
         </form>
       </div>

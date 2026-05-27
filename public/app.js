@@ -44,20 +44,7 @@ document.getElementById('btn-health').addEventListener('click', async () => {
   document.getElementById('quick-output').textContent = JSON.stringify(data, null, 2);
 });
 
-// ── Configuration — .env ────────────────────────────────────────────────────
-async function loadEnvConfig() {
-  try {
-    const res = await fetch(`${BASE}/api/config`);
-    const data = await res.json();
-    const form = document.getElementById('form-env');
-    for (const [key, value] of Object.entries(data)) {
-      const input = form.querySelector(`[name="${key}"]`);
-      if (input) input.value = value;
-    }
-  } catch {}
-}
-
-document.getElementById('form-env').addEventListener('submit', async (e) => {
+// ── Configuration — .env ────────────────────────────────────────────────────document.getElementById('form-env').addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = e.target;
   const data = Object.fromEntries(new FormData(form));
@@ -82,19 +69,7 @@ document.getElementById('form-env').addEventListener('submit', async (e) => {
   }
 });
 
-// ── Configuration — config.json (copy to clipboard) ─────────────────────────
-document.getElementById('btn-copy-config').addEventListener('click', () => {
-  const form = document.getElementById('form-project');
-  const branches = form.querySelector('[name="baseBranches"]').value
-    .split(',').map(b => b.trim()).filter(Boolean);
-  const prefix = form.querySelector('[name="branchPrefix"]').value.trim() || 'task/';
-  const config = JSON.stringify({ baseBranches: branches, branchPrefix: prefix }, null, 2);
-  navigator.clipboard.writeText(config).then(() => {
-    const status = document.getElementById('config-status');
-    status.textContent = '✓ Copied! Paste into .agents/config.json in your working repo.';
-    setTimeout(() => { status.textContent = ''; }, 5000);
-  });
-});
+
 
 // ── Tools Explorer ──────────────────────────────────────────────────────────
 async function loadTools() {
@@ -381,11 +356,46 @@ async function rpcCall(method, params) {
 }
 
 // ── Init ────────────────────────────────────────────────────────────────────
+function switchToTab(tabName) {
+  document.querySelectorAll('[data-tab]').forEach(l => l.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  const link = document.querySelector(`[data-tab="${tabName}"]`);
+  if (link) link.classList.add('active');
+  const section = document.getElementById(`tab-${tabName}`);
+  if (section) section.classList.add('active');
+}
+
 (async function init() {
-  refreshDashboard();
-  loadEnvConfig();
   loadTools();
   initAI();
   updateAiPlaceholder();
+
+  // Load config and decide which tab to show
+  try {
+    const res = await fetch(`${BASE}/api/config`);
+    const config = await res.json();
+    const form = document.getElementById('form-env');
+    for (const [key, value] of Object.entries(config)) {
+      const input = form.querySelector(`[name="${key}"]`);
+      if (input) input.value = value;
+    }
+
+    const hasHost = config.JIRA_HOST && config.JIRA_HOST !== 'your-company.atlassian.net';
+    const hasEmail = config.JIRA_EMAIL && config.JIRA_EMAIL !== 'you@yourcompany.com';
+    const hasToken = config.JIRA_TOKEN && config.JIRA_TOKEN === '••••••••';
+
+    if (hasHost && hasEmail && hasToken) {
+      // All required credentials set — show dashboard, auto health check
+      switchToTab('dashboard');
+      refreshDashboard();
+      document.getElementById('btn-health').click();
+    } else {
+      // Missing credentials — land on config tab
+      switchToTab('config');
+    }
+  } catch {
+    switchToTab('config');
+  }
+
   setInterval(refreshDashboard, 10000);
 })();

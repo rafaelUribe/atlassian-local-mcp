@@ -778,7 +778,7 @@ function startHttpServer(port, bindHost) {
         try {
           const data = JSON.parse(body);
           // Sanitize: only allow known keys
-          const allowed = ['JIRA_HOST', 'JIRA_EMAIL', 'JIRA_TOKEN', 'BITBUCKET_WORKSPACE', 'HTTP_PORT', 'HTTP_BIND'];
+          const allowed = ['JIRA_HOST', 'JIRA_EMAIL', 'JIRA_TOKEN', 'BITBUCKET_WORKSPACE', 'BASE_BRANCHES', 'BRANCH_PREFIX', 'HTTP_PORT', 'HTTP_BIND'];
           const lines = [
             '# Atlassian MCP — local credentials',
             '# NEVER commit this file.',
@@ -1593,7 +1593,12 @@ function dispatchTool(id, name, args, respondFn) {
     case 'mcp_get_agent_context': {
       const templatePath = require('path').join(__dirname, 'agents', 'agents-template.md');
       try {
-        const content = require('fs').readFileSync(templatePath, 'utf8');
+        let content = require('fs').readFileSync(templatePath, 'utf8');
+        // Inject env-based config so agents get actual values
+        const baseBranches = (process.env.BASE_BRANCHES || 'develop,test').split(',').map(b => b.trim());
+        const branchPrefix = process.env.BRANCH_PREFIX || 'task/';
+        content = content.replace(/\{\{BASE_BRANCHES\}\}/g, JSON.stringify(baseBranches));
+        content = content.replace(/\{\{BRANCH_PREFIX\}\}/g, branchPrefix);
         return sendText(id, content);
       } catch (e) {
         return sendError(id, new Error(`Cannot read agents-template.md: ${e.message}`));
