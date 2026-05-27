@@ -56,18 +56,17 @@
       </div>
 
       <h2>Connect your agent</h2>
-      <p class="section-subtitle">Copy this into your agent config to connect it to your local MCP.</p>
+      <p class="section-subtitle">Create <code>agents.md</code> in your repo root with this content, then git-exclude it.</p>
       <div class="setup-block">
-        <pre id="mcp-json-snippet">{
-  "servers": {
-    "atlassian": {
-      "type": "http",
-      "url": "http://localhost:3847/"
-    }
-  }
-}</pre>
+        <pre id="mcp-json-snippet"># Agent Context — Local MCP
+
+Connect to the Atlassian MCP server at:
+http://localhost:3847/
+
+On every new task, call the `mcp_get_agent_context` tool first.
+It returns the full workflow, conventions, and active tickets.</pre>
         <button type="button" id="btn-copy-mcp-json">Copy</button>
-        <p class="hint">Paste as <code>.vscode/mcp.json</code> in your repo — the agent gets all instructions from the MCP automatically.</p>
+        <p class="hint">Then run: <code>echo agents.md >> .git/info/exclude</code> — keeps it local, works with any IDE or agent.</p>
       </div>
 
       <h2>Active Tickets</h2>
