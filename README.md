@@ -38,7 +38,34 @@ curl -s -X POST http://localhost:3847/ \
 
 No scripts modify the system PATH, environment variables, or other repositories. Each developer's repos remain untouched.
 
-Optionally, the static template can be copied manually: [`agents/agents-template.md`](agents/agents-template.md).
+---
+
+## Alternative: manual file import
+
+If you prefer a static file over the HTTP tool, download the template directly into your working repo:
+
+```bash
+# From the root of your project repo
+mkdir -p .agents
+curl -sL https://raw.githubusercontent.com/rafaelUribe/atlassian-local-mcp/main/agents/agents-template.md \
+  -o .agents/agents.md
+```
+
+```powershell
+# Windows (PowerShell)
+New-Item -ItemType Directory -Force -Path .agents
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/rafaelUribe/atlassian-local-mcp/main/agents/agents-template.md" `
+  -OutFile ".agents\agents.md"
+```
+
+Then exclude it from git so it's never committed:
+
+```bash
+# Add to local-only git exclude (not .gitignore)
+echo ".agents/" >> .git/info/exclude
+```
+
+The file contains the same instructions returned by `mcp_get_agent_context` — both options are equivalent.
 
 ---
 
