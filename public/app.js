@@ -44,10 +44,45 @@ document.getElementById('btn-health').addEventListener('click', async () => {
   document.getElementById('quick-output').textContent = JSON.stringify(data, null, 2);
 });
 
+// ── Configuration — Base Branches ───────────────────────────────────────────
+let baseBranches = [];
+
+function renderBranches() {
+  const list = document.getElementById('branch-list');
+  list.innerHTML = baseBranches.map((b, i) =>
+    `<li><span>${b}</span><button type="button" data-idx="${i}">&times;</button></li>`
+  ).join('');
+  list.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      baseBranches.splice(Number(btn.dataset.idx), 1);
+      renderBranches();
+    });
+  });
+  document.querySelector('[name="BASE_BRANCHES"]').value = baseBranches.join(',');
+}
+
+function addBranch() {
+  const input = document.getElementById('branch-input');
+  const val = input.value.trim();
+  if (val && !baseBranches.includes(val)) {
+    baseBranches.push(val);
+    renderBranches();
+  }
+  input.value = '';
+  input.focus();
+}
+
+document.getElementById('btn-add-branch').addEventListener('click', addBranch);
+document.getElementById('branch-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); addBranch(); }
+});
+
 // ── Configuration — .env ────────────────────────────────────────────────────
 document.getElementById('form-env').addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = e.target;
+  // Ensure BASE_BRANCHES hidden input has the current value
+  form.querySelector('[name="BASE_BRANCHES"]').value = baseBranches.join(',');
   const data = Object.fromEntries(new FormData(form));
   try {
     const res = await fetch(`${BASE}/api/config`, {
@@ -58,8 +93,16 @@ document.getElementById('form-env').addEventListener('submit', async (e) => {
     const result = await res.json();
     const status = document.getElementById('env-status');
     if (result.ok) {
-      status.textContent = '✓ Saved! Restart server to apply changes.';
+      status.textContent = '✓ Saved! Server restarting…';
       status.style.color = 'var(--success)';
+      // Wait for server to come back up after auto-restart
+      setTimeout(async () => {
+        for (let i = 0; i < 10; i++) {
+          try { await fetch(`${BASE}/health`); window.location.reload(); return; } catch {}
+          await new Promise(r => setTimeout(r, 500));
+        }
+        status.textContent = '✓ Saved. Refresh page manually if needed.';
+      }, 1000);
     } else {
       status.textContent = `✗ ${result.error}`;
       status.style.color = 'var(--danger)';
@@ -377,6 +420,11 @@ function switchToTab(tabName) {
     const config = await res.json();
     const form = document.getElementById('form-env');
     for (const [key, value] of Object.entries(config)) {
+      if (key === 'BASE_BRANCHES') {
+        baseBranches = value ? value.split(',').map(b => b.trim()).filter(Boolean) : [];
+        renderBranches();
+        continue;
+      }
       const input = form.querySelector(`[name="${key}"]`);
       if (input) input.value = value;
     }

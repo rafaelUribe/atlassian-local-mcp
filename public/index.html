@@ -79,10 +79,15 @@
             <input type="text" name="BITBUCKET_WORKSPACE" placeholder="your-workspace-slug">
             <small>Found in: bitbucket.org/<strong>{this-part}</strong></small>
           </label>
-          <label>Base Branches
-            <input type="text" name="BASE_BRANCHES" placeholder="develop, test">
-            <small>Comma-separated list of base branches for PRs</small>
-          </label>
+          <div class="branch-config">
+            <label>Base Branches</label>
+            <div class="branch-input-row">
+              <input type="text" id="branch-input" placeholder="e.g. develop">
+              <button type="button" id="btn-add-branch">Add</button>
+            </div>
+            <ul id="branch-list" class="branch-tags"></ul>
+            <input type="hidden" name="BASE_BRANCHES">
+          </div>
           <label>Branch Prefix
             <input type="text" name="BRANCH_PREFIX" placeholder="task/">
             <small>Prefix for new feature branches (e.g. task/, feature/)</small>

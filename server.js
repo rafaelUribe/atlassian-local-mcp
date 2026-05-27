@@ -797,11 +797,26 @@ function startHttpServer(port, bindHost) {
             if (key === 'JIRA_TOKEN' && (val === '••••••••' || val === '')) {
               val = existingToken; // preserve existing token if masked/empty
             }
+            // Apply defaults for optional workflow keys
+            if (!val && key === 'BASE_BRANCHES') val = 'develop,test';
+            if (!val && key === 'BRANCH_PREFIX') val = 'task/';
             if (val) lines.push(`${key}=${val}`);
           }
           fs.writeFileSync(path.join(__dirname, '.env'), lines.join('\n') + '\n', 'utf8');
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: true }));
+          // Auto-restart: respawn the process after saving new config
+          setTimeout(() => {
+            const { spawn } = require('child_process');
+            const child = spawn(process.argv[0], process.argv.slice(1).concat('--no-open'), {
+              cwd: __dirname,
+              detached: true,
+              stdio: 'ignore',
+              env: { ...process.env, ...Object.fromEntries(lines.filter(l => l.includes('=')).map(l => l.split('=')).map(([k, ...v]) => [k, v.join('=')])) }
+            });
+            child.unref();
+            process.exit(0);
+          }, 300);
         } catch (err) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: false, error: err.message }));
