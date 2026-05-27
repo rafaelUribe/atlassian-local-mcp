@@ -28,24 +28,84 @@ if (missing.length) {
 const auth = Buffer.from(`${ATLASSIAN_EMAIL}:${ATLASSIAN_TOKEN}`).toString('base64');
 const MAX_BODY_SIZE = 1024 * 1024; // 1 MB max request body
 
-// ── Local Knowledge Cache ─────────────────────────────────────────────────────
-const CACHE_DIR = path.join(__dirname, 'cache', 'tickets');
+// ── Local Knowledge Cache — single-file JSON store ───────────────────────────
+const CACHE_FILE = path.join(__dirname, 'cache', 'mcp-cache.json');
+const CACHE_DIR  = path.join(__dirname, 'cache', 'tickets'); // kept for migration only
+
+/** @type {{ tickets: Record<string, { context?:any, repos?:any, articles?:any, related?:any, pinned?:any, timeline?:any }> }} */
+let _cacheDb = null;
+
+function _dbLoad() {
+  if (_cacheDb) return _cacheDb;
+  fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
+  try { _cacheDb = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); }
+  catch { _cacheDb = { tickets: {} }; }
+  _migrateJsonFiles();
+  return _cacheDb;
+}
+
+function _dbSave() {
+  const tmp = CACHE_FILE + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(_cacheDb, null, 2), 'utf8');
+  fs.renameSync(tmp, CACHE_FILE);
+}
+
+/** One-time migration: import existing per-ticket JSON dirs into the single file */
+function _migrateJsonFiles() {
+  if (!fs.existsSync(CACHE_DIR)) return;
+  const FILE_KEYS = ['context','repos','articles','related','pinned','timeline'];
+  let migrated = 0;
+  for (const id of fs.readdirSync(CACHE_DIR)) {
+    if (!fs.statSync(path.join(CACHE_DIR, id)).isDirectory()) continue;
+    if (_cacheDb.tickets[id]) continue;
+    _cacheDb.tickets[id] = {};
+    for (const key of FILE_KEYS) {
+      try {
+        _cacheDb.tickets[id][key] = JSON.parse(
+          fs.readFileSync(path.join(CACHE_DIR, id, `${key}.json`), 'utf8')
+        );
+      } catch { /* file didn't exist, skip */ }
+    }
+    migrated++;
+  }
+  if (migrated > 0) {
+    _dbSave();
+    console.log(`[cache] Migrated ${migrated} ticket(s) from JSON files → mcp-cache.json`);
+  }
+}
+
+const FILE_TO_KEY = {
+  'context.json':  'context',
+  'repos.json':    'repos',
+  'articles.json': 'articles',
+  'related.json':  'related',
+  'pinned.json':   'pinned',
+  'timeline.json': 'timeline',
+};
 
 function cacheRead(ticketId, file) {
-  try { return JSON.parse(fs.readFileSync(path.join(CACHE_DIR, ticketId, file), 'utf8')); }
-  catch { return null; }
+  const db = _dbLoad();
+  const key = FILE_TO_KEY[file];
+  if (!key) return null;
+  return db.tickets[ticketId]?.[key] ?? null;
 }
 
 function cacheWrite(ticketId, file, data) {
-  const dir = path.join(CACHE_DIR, ticketId);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, file), JSON.stringify(data, null, 2), 'utf8');
+  const db = _dbLoad();
+  const key = FILE_TO_KEY[file];
+  if (!key) return;
+  if (!db.tickets[ticketId]) db.tickets[ticketId] = {};
+  db.tickets[ticketId][key] = data;
+  _dbSave();
 }
 
 function cacheAppendTimeline(ticketId, entry) {
-  const existing = cacheRead(ticketId, 'timeline.json') || [];
-  existing.unshift({ ...entry, date: new Date().toISOString() });
-  cacheWrite(ticketId, 'timeline.json', existing.slice(0, 200));
+  const db = _dbLoad();
+  if (!db.tickets[ticketId]) db.tickets[ticketId] = {};
+  const tl = db.tickets[ticketId].timeline || [];
+  tl.unshift({ ...entry, date: new Date().toISOString() });
+  db.tickets[ticketId].timeline = tl.slice(0, 200);
+  _dbSave();
 }
 
 function formatTicketContext(ticketId) {
@@ -991,16 +1051,15 @@ function startHttpServer(port, bindHost) {
       // Cache — list all cached tickets as JSON
       if (url.pathname === '/api/cache/tickets') {
         try {
-          if (!fs.existsSync(CACHE_DIR)) { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('[]'); }
-          const dirs = fs.readdirSync(CACHE_DIR).filter(d => fs.statSync(path.join(CACHE_DIR, d)).isDirectory());
-          const tickets = dirs.map(id => ({
+          const db = _dbLoad();
+          const tickets = Object.entries(db.tickets).map(([id, data]) => ({
             id,
-            context:  cacheRead(id, 'context.json'),
-            repos:    cacheRead(id, 'repos.json')    || [],
-            articles: cacheRead(id, 'articles.json') || [],
-            related:  cacheRead(id, 'related.json')  || [],
-            timeline: cacheRead(id, 'timeline.json') || [],
-            pinned:   cacheRead(id, 'pinned.json')   || [],
+            context:  data.context  || null,
+            repos:    data.repos    || [],
+            articles: data.articles || [],
+            related:  data.related  || [],
+            timeline: data.timeline || [],
+            pinned:   data.pinned   || [],
           }));
           res.writeHead(200, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify(tickets));
@@ -1922,20 +1981,21 @@ function dispatchTool(id, name, args, respondFn) {
 
     case 'mcp_list_cached_tickets': {
       try {
-        if (!fs.existsSync(CACHE_DIR)) return sendText(id, 'Cache is empty. Run mcp_index_ticket to start indexing.');
-        const dirs = fs.readdirSync(CACHE_DIR).filter(d => fs.statSync(path.join(CACHE_DIR, d)).isDirectory());
-        if (!dirs.length) return sendText(id, 'Cache is empty. Run mcp_index_ticket to start indexing.');
-        const rows = dirs.map(ticketId => {
-          const ctx = cacheRead(ticketId, 'context.json');
-          const tl  = cacheRead(ticketId, 'timeline.json') || [];
-          const repos = cacheRead(ticketId, 'repos.json') || [];
-          const arts  = cacheRead(ticketId, 'articles.json') || [];
-          const rel   = cacheRead(ticketId, 'related.json') || [];
+        const db = _dbLoad();
+        const ids = Object.keys(db.tickets);
+        if (!ids.length) return sendText(id, 'Cache is empty. Run mcp_index_ticket to start indexing.');
+        const rows = ids.map(ticketId => {
+          const data = db.tickets[ticketId];
+          const ctx   = data.context;
+          const tl    = data.timeline || [];
+          const repos = data.repos    || [];
+          const arts  = data.articles || [];
+          const rel   = data.related  || [];
           return `**${ticketId}** [${ctx?.jira?.status || '?'}] ${ctx?.jira?.summary || '(no context)'}
   • Indexed: ${ctx?.indexedAt?.slice(0, 16) || '?'} | Repos: ${repos.length} | Articles: ${arts.length} | Related: ${rel.length} | Timeline entries: ${tl.length}
   • Last change: ${tl[0]?.date?.slice(0, 16) || '?'} — ${tl[0]?.summary || ''}`;
         });
-        sendText(id, `Cached tickets (${dirs.length}):\n\n${rows.join('\n\n')}`);
+        sendText(id, `Cached tickets (${ids.length}):\n\n${rows.join('\n\n')}`);
       } catch (err) { sendError(id, err); }
       break;
     }
