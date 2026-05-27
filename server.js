@@ -778,7 +778,7 @@ function startHttpServer(port, bindHost) {
         try {
           const data = JSON.parse(body);
           // Sanitize: only allow known keys
-          const allowed = ['JIRA_HOST', 'JIRA_EMAIL', 'JIRA_TOKEN', 'BITBUCKET_WORKSPACE', 'BASE_BRANCHES', 'BRANCH_PREFIX', 'HTTP_PORT', 'HTTP_BIND'];
+          const allowed = ['JIRA_HOST', 'JIRA_EMAIL', 'JIRA_TOKEN', 'BITBUCKET_WORKSPACE', 'BASE_BRANCHES', 'BRANCH_PREFIX', 'ACTIVE_TICKETS', 'HTTP_PORT', 'HTTP_BIND'];
           const lines = [
             '# Atlassian MCP — local credentials',
             '# NEVER commit this file.',

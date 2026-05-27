@@ -86,7 +86,7 @@ document.getElementById('btn-health').addEventListener('click', async () => {
 
 // ── Prompt Builder ──────────────────────────────────────────────────────────
 
-// Step 1: Copy mcp.json
+// Copy mcp.json snippet
 document.getElementById('btn-copy-mcp-json').addEventListener('click', () => {
   const snippet = document.getElementById('mcp-json-snippet').textContent;
   navigator.clipboard.writeText(snippet).then(() => {
@@ -96,37 +96,54 @@ document.getElementById('btn-copy-mcp-json').addEventListener('click', () => {
   });
 });
 
-// Step 2: Copy prompt
-function buildPrompt(ticketId) {
-  return `Start ticket ${ticketId}`;
-}
+// ── Active Tickets (chips, persisted in .env) ───────────────────────────────
+let activeTickets = [];
 
-function updatePromptPreview() {
-  const ticket = document.getElementById('ticket-input').value.trim().toUpperCase();
-  const output = document.getElementById('prompt-output');
-  if (!ticket) {
-    output.textContent = '';
-    output.style.display = 'none';
-    return;
-  }
-  output.style.display = '';
-  output.textContent = buildPrompt(ticket);
-}
-
-document.getElementById('ticket-input').addEventListener('input', updatePromptPreview);
-document.getElementById('btn-copy-prompt').addEventListener('click', () => {
-  const ticket = document.getElementById('ticket-input').value.trim().toUpperCase();
-  if (!ticket) { document.getElementById('ticket-input').focus(); return; }
-  const prompt = buildPrompt(ticket);
-  navigator.clipboard.writeText(prompt).then(() => {
-    const btn = document.getElementById('btn-copy-prompt');
-    btn.textContent = '✓ Copied!';
-    setTimeout(() => { btn.textContent = 'Copy Prompt'; }, 2000);
+function renderTickets() {
+  const list = document.getElementById('ticket-list');
+  list.innerHTML = activeTickets.map((t, i) =>
+    `<li><span>${t}</span><button type="button" data-idx="${i}">&times;</button></li>`
+  ).join('');
+  list.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeTickets.splice(Number(btn.dataset.idx), 1);
+      renderTickets();
+      saveTickets();
+    });
   });
-});
+  document.querySelector('[name="ACTIVE_TICKETS"]').value = activeTickets.join(',');
+}
 
-// Hide preview initially
-document.getElementById('prompt-output').style.display = 'none';
+function addTicket() {
+  const input = document.getElementById('ticket-input');
+  const val = input.value.trim().toUpperCase();
+  if (val && !activeTickets.includes(val)) {
+    activeTickets.push(val);
+    renderTickets();
+    saveTickets();
+  }
+  input.value = '';
+  input.focus();
+}
+
+async function saveTickets() {
+  // Persist immediately without full form submit
+  try {
+    const res = await fetch(`${BASE}/api/config`);
+    const config = await res.json();
+    config.ACTIVE_TICKETS = activeTickets.join(',');
+    await fetch(`${BASE}/api/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config)
+    });
+  } catch {}
+}
+
+document.getElementById('btn-add-ticket').addEventListener('click', addTicket);
+document.getElementById('ticket-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); addTicket(); }
+});
 
 // ── Configuration — Base Branches ───────────────────────────────────────────
 let baseBranches = [];
@@ -498,6 +515,11 @@ async function rpcCall(method, params) {
       if (key === 'BASE_BRANCHES') {
         baseBranches = value ? value.split(',').map(b => b.trim()).filter(Boolean) : [];
         renderBranches();
+        continue;
+      }
+      if (key === 'ACTIVE_TICKETS') {
+        activeTickets = value ? value.split(',').map(t => t.trim()).filter(Boolean) : [];
+        renderTickets();
         continue;
       }
       const input = form.querySelector(`[name="${key}"]`);
