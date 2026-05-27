@@ -196,26 +196,68 @@ document.querySelectorAll('.tools-filters .filter').forEach(btn => {
 const aiTab = document.querySelector('[data-tab="ai"]');
 
 async function initAI() {
-  try {
-    if (!('ai' in window) || !window.ai?.languageModel) {
-      throw new Error('Not available');
-    }
-    const capabilities = await window.ai.languageModel.capabilities();
-    if (capabilities.available === 'no') throw new Error('Model not available');
+  const dashAi = document.getElementById('dash-ai');
+  const unavailableEl = document.getElementById('ai-unavailable');
+  const availableEl = document.getElementById('ai-available');
+  const statusEl = document.getElementById('ai-status-detail');
 
-    document.getElementById('ai-unavailable').classList.add('hidden');
-    document.getElementById('ai-available').classList.remove('hidden');
-    document.getElementById('dash-ai').textContent = 'Available';
-    document.getElementById('dash-ai').style.color = 'var(--success)';
-    aiTab.style.display = '';
-  } catch {
-    document.getElementById('ai-unavailable').classList.remove('hidden');
-    document.getElementById('ai-available').classList.add('hidden');
-    document.getElementById('dash-ai').textContent = 'Not enabled';
-    document.getElementById('dash-ai').style.color = 'var(--text-dim)';
-    // Hide AI tab from nav — show only when user clicks it from dashboard hint
+  try {
+    // Check for LanguageModel API (newer global) or window.ai (legacy)
+    const lm = (typeof LanguageModel !== 'undefined') ? LanguageModel
+      : window.ai?.languageModel;
+
+    if (!lm) {
+      throw new Error('LanguageModel API not found. Enable the required browser flags.');
+    }
+
+    // Check availability state
+    const availability = typeof lm.availability === 'function'
+      ? await lm.availability()
+      : (await lm.capabilities?.())?.available;
+
+    if (availability === 'available' || availability === 'readily') {
+      // Model is ready
+      unavailableEl.classList.add('hidden');
+      availableEl.classList.remove('hidden');
+      dashAi.textContent = 'Available';
+      dashAi.style.color = 'var(--success)';
+      aiTab.style.display = '';
+      aiTab.style.opacity = '';
+      aiTab.title = '';
+      return;
+    }
+
+    if (availability === 'downloading') {
+      // Model is being downloaded right now
+      dashAi.textContent = 'Downloading…';
+      dashAi.style.color = 'var(--warning)';
+      if (statusEl) statusEl.textContent = 'The browser is currently downloading the local AI model (Phi-mini/Gemini Nano). Please wait a few minutes and refresh this page.';
+      throw new Error('downloading');
+    }
+
+    if (availability === 'downloadable' || availability === 'after-download') {
+      // Model can be downloaded — trigger silent initialization to start it
+      dashAi.textContent = 'Triggering download…';
+      dashAi.style.color = 'var(--warning)';
+      try {
+        const createFn = lm.create || lm.create?.bind(lm);
+        if (createFn) await createFn({ expectedInputLanguages: ['en'] });
+      } catch (e) { /* expected to fail during download */ }
+      if (statusEl) statusEl.textContent = 'Download requested. Monitor chrome://components or edge://components for progress. Refresh this page when complete.';
+      throw new Error('downloadable');
+    }
+
+    // 'no' or unknown state
+    throw new Error('Model not available in this browser.');
+  } catch (err) {
+    unavailableEl.classList.remove('hidden');
+    availableEl.classList.add('hidden');
+    if (!dashAi.textContent.includes('ownload')) {
+      dashAi.textContent = 'Not enabled';
+      dashAi.style.color = 'var(--text-dim)';
+    }
     aiTab.style.opacity = '0.5';
-    aiTab.title = 'Requires Chrome built-in AI (Gemini Nano)';
+    aiTab.title = 'Requires Chrome/Edge built-in AI model';
   }
 }
 
@@ -228,6 +270,13 @@ document.querySelectorAll('.ai-mode').forEach(btn => {
     updateAiPlaceholder();
   });
 });
+
+// Helper: resolve the LanguageModel API regardless of browser implementation
+function getLanguageModel() {
+  if (typeof LanguageModel !== 'undefined') return LanguageModel;
+  if (window.ai?.languageModel) return window.ai.languageModel;
+  throw new Error('LanguageModel API not available. See the AI Assistant tab for setup instructions.');
+}
 
 function updateAiPlaceholder() {
   const placeholders = {
@@ -261,7 +310,7 @@ async function sendAiMessage() {
         chat: 'You are a helpful assistant for a software development team using Atlassian tools (Jira, Confluence, Bitbucket). Help with workflow questions, JQL/CQL queries, git branching strategies, and general development practices. Be concise.'
       };
 
-      aiSession = await window.ai.languageModel.create({
+      aiSession = await getLanguageModel().create({
         systemPrompt: systemPrompts[currentAiMode]
       });
     }

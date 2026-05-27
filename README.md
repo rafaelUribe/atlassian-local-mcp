@@ -285,40 +285,87 @@ Yes — the MCP server must be running. You can also run it as a background proc
 
 ## Prerequisites: Built-in AI (Optional)
 
-The UI includes an AI assistant powered by **Gemini Nano**, a local model that runs entirely in your browser — no API keys, no cloud calls. This feature is optional; the MCP works fully without it.
+The UI includes an **AI assistant** powered by the browser's **LanguageModel API** — a local on-device model (Gemini Nano in Chrome, Phi-mini in Edge) that runs entirely in your browser. No API keys, no cloud calls, no data leaves your machine.
 
-To enable it in **Google Chrome** (version 127+):
+This feature is **optional**. The MCP works fully without it — you only lose the AI tab (JQL/CQL generation, summarization, chat).
 
-### 1. Enable the required flags
+---
 
-Open `chrome://flags` and configure:
+### Google Chrome Configuration
+
+Requires **Chrome 127+** (Stable, Beta, Dev, or Canary).
+
+#### 1. Enable the required flags
+
+Open a new tab and navigate to `chrome://flags`. Locate and configure:
 
 | Flag | Value |
 |---|---|
 | `#prompt-api-for-gemini-nano` | **Enabled** |
 | `#optimization-guide-on-device-model` | **Enabled BypassPerfRequirement** |
 
-### 2. Relaunch the browser
+> **Why BypassPerfRequirement?** This skips hardware checks (minimum RAM/disk) that might otherwise block the download on older machines.
 
-Navigate to `chrome://restart` to fully restart Chrome (all tabs will be restored).
+#### 2. Restart the browser
 
-### 3. Download the model
+Navigate to `chrome://restart` to force a complete restart. All tabs will be restored automatically.
 
-1. Go to `chrome://components`
-2. Find **"Optimization Guide On Device Model"**
+#### 3. Download the model
+
+1. Open `chrome://components`
+2. Find the component named **"Optimization Guide On Device Model"**
 3. Click **"Check for update"**
-4. Wait for the download to complete (~3-4 GB)
+4. Wait until the status shows a version number and "Up-to-date" (~3-4 GB download)
 
-> The model downloads in the background. You can continue working — just wait until the version number appears and status shows "Up-to-date".
+> The download happens in the background. You can continue working — just don't close Chrome.
 
-### 4. Verify installation
+---
 
-Open DevTools (F12) → Console and run:
+### Microsoft Edge Configuration
+
+Requires **Edge Dev or Canary channel** (version 127+).
+
+#### 1. Enable the required flags
+
+Open a new tab and navigate to `edge://flags`. Locate and configure:
+
+| Flag | Value |
+|---|---|
+| `Prompt API for Phi mini` | **Enabled** |
+| `#optimization-guide-on-device-model` | **Enabled BypassPerfRequirement** |
+
+> If you can't find "Prompt API for Phi mini" by name, search for `#edge-local-ai-prompt-api` in the flags page.
+
+#### 2. Restart the browser
+
+Navigate to `edge://restart` to force a complete restart.
+
+> **If flags don't apply after restart:** Open Windows Task Manager → End all Microsoft Edge background processes → Reopen Edge.
+
+#### 3. Download the model
+
+1. Open `edge://components`
+2. Find the component named **"Optimization Guide On Device Model"** (may also appear as **"Microsoft Edge AI Engine"**)
+3. Click **"Check for update"**
+4. Wait for the download to complete
+
+---
+
+### Verification (Both Browsers)
+
+Open **DevTools** (F12 or Ctrl+Shift+I) on any **HTTPS** page (e.g., `https://google.com`) and run in the Console:
 
 ```js
-await ai.languageModel.capabilities();
+await LanguageModel.availability();
 ```
 
-You should see `available: "readily"`. If it says `"after-download"`, the model is still downloading.
+| Result | Meaning |
+|---|---|
+| `'available'` | Model is ready — the AI tab in the MCP UI will work |
+| `'downloading'` | Model is currently downloading — wait a few minutes |
+| `'downloadable'` | Model can be downloaded — the MCP UI will trigger it automatically |
+| `ReferenceError` | API not enabled — revisit the flags configuration above |
 
-> **Note:** If you don't enable this, the AI tab in the UI simply won't appear — all other features (config, tools explorer, dashboard) work normally.
+> **Important:** The LanguageModel API only works on **secure origins** (HTTPS or `localhost`). Since the MCP UI runs on `http://localhost:3847/ui/`, it qualifies automatically.
+
+> **Note:** If you don't enable this, the AI tab shows setup instructions instead of hiding — all other features (dashboard, config, tools explorer) work normally.

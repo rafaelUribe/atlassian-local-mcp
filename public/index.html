@@ -143,10 +143,9 @@
       <div id="ai-unavailable">
         <div class="warning-box">
           <h3>Local AI model not detected</h3>
-          <p>This feature uses <strong>Gemini Nano</strong>, a local model that runs entirely in your browser — no API keys needed.</p>
-          <p>To enable it, open DevTools (F12) and check:</p>
-          <pre>await ai.languageModel.capabilities();</pre>
-          <p>If it returns <code>"unavailable"</code>, follow these steps:</p>
+          <p>This feature uses the <strong>LanguageModel API</strong> — a local model (Gemini Nano / Phi-mini) that runs entirely in your browser. No API keys needed.</p>
+          <p id="ai-status-detail"></p>
+          <h4>Google Chrome (127+)</h4>
           <ol>
             <li>Open <code>chrome://flags</code></li>
             <li>Set <code>#prompt-api-for-gemini-nano</code> → <strong>Enabled</strong></li>
@@ -155,6 +154,17 @@
             <li>Go to <code>chrome://components</code> → find <strong>Optimization Guide On Device Model</strong> → click <strong>Check for update</strong></li>
             <li>Wait for download (~3-4 GB), then refresh this page</li>
           </ol>
+          <h4>Microsoft Edge (Dev/Canary)</h4>
+          <ol>
+            <li>Open <code>edge://flags</code></li>
+            <li>Set <code>Prompt API for Phi mini</code> → <strong>Enabled</strong></li>
+            <li>Set <code>#optimization-guide-on-device-model</code> → <strong>Enabled BypassPerfRequirement</strong></li>
+            <li>Navigate to <code>edge://restart</code> (kill Edge background processes if needed)</li>
+            <li>Go to <code>edge://components</code> → find <strong>Optimization Guide On Device Model</strong> → click <strong>Check for update</strong></li>
+            <li>Wait for download, then refresh this page</li>
+          </ol>
+          <h4>Verify in DevTools (F12)</h4>
+          <pre>await LanguageModel.availability();  // Expected: 'available'</pre>
         </div>
       </div>
       <div id="ai-available" class="hidden">
