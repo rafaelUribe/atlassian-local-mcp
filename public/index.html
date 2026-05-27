@@ -58,13 +58,34 @@
       <h2>Connect your agent</h2>
       <p class="section-subtitle">Create <code>agents.md</code> in your repo root with this content, then git-exclude it.</p>
       <div class="setup-block">
-        <pre id="mcp-json-snippet"># Agent Context — Local MCP
+        <pre id="mcp-json-snippet"># Agent Context — Atlassian Local MCP
 
-Connect to the Atlassian MCP server at:
-http://localhost:3847/
+A local MCP server is running at http://localhost:3847/
+It exposes Jira, Confluence, and Bitbucket tools via HTTP (JSON-RPC 2.0).
+You can call any tool with a plain HTTP POST — no plugin or native MCP support needed.
 
-On every new task, call the `mcp_get_agent_context` tool first.
-It returns the full workflow, conventions, and active tickets.</pre>
+## How to call a tool
+
+POST http://localhost:3847/
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "mcp_get_agent_context",
+    "arguments": {}
+  }
+}
+
+## Getting started
+
+When the user asks you to work on a ticket, call `mcp_get_agent_context` first
+(as shown above). It returns your full workflow, conventions, and active tickets.
+
+To list all available tools:
+POST the same URL with method "tools/list" and empty params {}.</pre>
         <button type="button" id="btn-copy-mcp-json">Copy</button>
         <p class="hint">Then run: <code>echo agents.md >> .git/info/exclude</code> — keeps it local, works with any IDE or agent.</p>
       </div>
