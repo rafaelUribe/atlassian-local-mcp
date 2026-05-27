@@ -28,6 +28,193 @@ if (missing.length) {
 const auth = Buffer.from(`${ATLASSIAN_EMAIL}:${ATLASSIAN_TOKEN}`).toString('base64');
 const MAX_BODY_SIZE = 1024 * 1024; // 1 MB max request body
 
+// ── Local Knowledge Cache ─────────────────────────────────────────────────────
+const CACHE_DIR = path.join(__dirname, 'cache', 'tickets');
+
+function cacheRead(ticketId, file) {
+  try { return JSON.parse(fs.readFileSync(path.join(CACHE_DIR, ticketId, file), 'utf8')); }
+  catch { return null; }
+}
+
+function cacheWrite(ticketId, file, data) {
+  const dir = path.join(CACHE_DIR, ticketId);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, file), JSON.stringify(data, null, 2), 'utf8');
+}
+
+function cacheAppendTimeline(ticketId, entry) {
+  const existing = cacheRead(ticketId, 'timeline.json') || [];
+  existing.unshift({ ...entry, date: new Date().toISOString() });
+  cacheWrite(ticketId, 'timeline.json', existing.slice(0, 200));
+}
+
+function formatTicketContext(ticketId) {
+  const ctx    = cacheRead(ticketId, 'context.json');
+  const repos  = cacheRead(ticketId, 'repos.json')    || [];
+  const arts   = cacheRead(ticketId, 'articles.json') || [];
+  const rel    = cacheRead(ticketId, 'related.json')  || [];
+  const tl     = cacheRead(ticketId, 'timeline.json') || [];
+  if (!ctx) return `No cached context for ${ticketId}. Run mcp_index_ticket first.`;
+
+  const j = ctx.jira;
+  const lines = [
+    `# ${ticketId} — ${j.summary}`,
+    `**Status:** ${j.status} | **Priority:** ${j.priority} | **Type:** ${j.issueType}`,
+    `**Assignee:** ${j.assignee || 'Unassigned'} | **Reporter:** ${j.reporter}`,
+    j.epic ? `**Epic:** ${j.epic}` : '',
+    j.labels?.length ? `**Labels:** ${j.labels.join(', ')}` : '',
+    j.components?.length ? `**Components:** ${j.components.join(', ')}` : '',
+    `**Last indexed:** ${ctx.indexedAt?.slice(0, 10)}`,
+    '',
+    j.description ? `## Description\n${j.description.slice(0, 800)}${j.description.length > 800 ? '...' : ''}` : '',
+  ];
+
+  if (rel.length) {
+    lines.push('\n## Related Tickets');
+    rel.forEach(r => lines.push(`- **${r.key}** [${r.status}] ${r.summary} (${r.assignee || 'unassigned'})`));
+  }
+
+  if (repos.length) {
+    lines.push('\n## Bitbucket — Branches & PRs');
+    repos.forEach(r => {
+      lines.push(`### ${r.repo}`);
+      r.branches.forEach(b => lines.push(`  - branch: \`${b.name}\` (${b.target?.date?.slice(0, 10) || '?'})`));
+      (r.prs || []).forEach(p => lines.push(`  - PR #${p.id}: ${p.title} [${p.state}]`));
+    });
+  }
+
+  if (arts.length) {
+    lines.push('\n## Confluence Articles');
+    arts.forEach(a => lines.push(`- [${a.title}](${a.url}) — space: ${a.space} (v${a.version}, ${a.lastModified?.slice(0, 10) || '?'})`));
+  }
+
+  if (tl.length) {
+    lines.push('\n## Timeline (recent changes)');
+    tl.slice(0, 10).forEach(e => lines.push(`- **${e.date?.slice(0, 16)}** [${e.type}] ${e.summary}`));
+  }
+
+  return lines.filter(l => l !== '').join('\n');
+}
+
+// Promise wrappers (used inside async tool handlers)
+function atlassianP(apiPath, method, body) {
+  return new Promise((resolve, reject) =>
+    fetchAtlassian(apiPath, method, body, (e, d) => e ? reject(e) : resolve(d)));
+}
+function bitbucketP(apiPath, method, body) {
+  return new Promise((resolve, reject) =>
+    fetchBitbucket(apiPath, method, body, (e, d) => e ? reject(e) : resolve(d)));
+}
+
+async function indexTicket(ticketId) {
+  const jiraFields = 'summary,description,status,priority,assignee,reporter,labels,components,issuetype,comment,subtasks,issuelinks,parent,created,updated,customfield_10014';
+  const ticket = await atlassianP(`/rest/api/3/issue/${encodeURIComponent(ticketId)}?fields=${jiraFields}`, 'GET', null);
+  const fields = ticket.fields || {};
+
+  // Related ticket keys from links + subtasks
+  const relatedKeys = [
+    ...(fields.issuelinks || []).map(l => l.inwardIssue?.key || l.outwardIssue?.key).filter(Boolean),
+    ...(fields.subtasks || []).map(s => s.key)
+  ].filter(Boolean);
+
+  const relatedTickets = await Promise.all(
+    relatedKeys.slice(0, 20).map(key =>
+      atlassianP(`/rest/api/3/issue/${encodeURIComponent(key)}?fields=summary,status,priority,assignee`, 'GET', null).catch(() => null)
+    )
+  );
+
+  // Bitbucket: discover repos with branches/PRs for this ticket
+  let repoBranches = [];
+  if (BITBUCKET_WORKSPACE) {
+    try {
+      const reposRes = await bitbucketP(`/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}?pagelen=50`, 'GET', null);
+      const repos = reposRes.values || [];
+      const branchResults = await Promise.all(
+        repos.map(repo =>
+          bitbucketP(`/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${repo.slug}/refs/branches?q=name~"${ticketId}"&pagelen=10`, 'GET', null)
+            .then(r => ({ repo: repo.slug, branches: r.values || [] }))
+            .catch(() => null)
+        )
+      );
+      repoBranches = branchResults.filter(r => r && r.branches.length > 0);
+      // Fetch open PRs for repos that have branches
+      await Promise.all(repoBranches.map(async r => {
+        try {
+          const prs = await bitbucketP(`/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${r.repo}/pullrequests?state=OPEN&pagelen=10`, 'GET', null);
+          r.prs = (prs.values || []).filter(p => p.source?.branch?.name?.includes(ticketId));
+        } catch { r.prs = []; }
+      }));
+    } catch {}
+  }
+
+  // Confluence: search in configured spaces
+  const spaces = (process.env.CONFLUENCE_SPACES || '').split(',').map(s => s.trim()).filter(Boolean);
+  let articles = [];
+  try {
+    const spaceClause = spaces.length ? ` AND (${spaces.map(s => `space = "${s}"`).join(' OR ')})` : '';
+    const cql = encodeURIComponent(`text ~ "${ticketId}"${spaceClause} AND type = page ORDER BY lastmodified DESC`);
+    const confRes = await atlassianP(`/wiki/rest/api/content/search?cql=${cql}&limit=10&expand=version,space`, 'GET', null);
+    articles = (confRes.results || []).map(p => ({
+      id: p.id, title: p.title,
+      space: p.space?.key,
+      url: `${(process.env.JIRA_HOST || '').replace(/\/$/, '')}/wiki${p._links?.webui || ''}`,
+      lastModified: p.version?.when, version: p.version?.number
+    }));
+  } catch {}
+
+  // Build context
+  const prev = cacheRead(ticketId, 'context.json');
+  const context = {
+    ticketId, indexedAt: new Date().toISOString(),
+    jira: {
+      summary: fields.summary,
+      description: (fields.description?.content || []).flatMap(b => b.content || []).map(c => c.text || '').join(' ').slice(0, 2000),
+      status: fields.status?.name, priority: fields.priority?.name,
+      assignee: fields.assignee?.displayName, reporter: fields.reporter?.displayName,
+      labels: fields.labels || [], components: (fields.components || []).map(c => c.name),
+      issueType: fields.issuetype?.name, epic: fields.customfield_10014,
+      created: fields.created, updated: fields.updated,
+      commentsCount: fields.comment?.total || 0
+    }
+  };
+  cacheWrite(ticketId, 'context.json', context);
+  cacheWrite(ticketId, 'related.json', relatedTickets.filter(Boolean).map(t => ({
+    key: t.key, summary: t.fields?.summary,
+    status: t.fields?.status?.name, priority: t.fields?.priority?.name,
+    assignee: t.fields?.assignee?.displayName
+  })));
+  cacheWrite(ticketId, 'repos.json', repoBranches);
+  cacheWrite(ticketId, 'articles.json', articles);
+
+  // Timeline: record changes vs previous cache
+  const changes = [];
+  if (!prev) {
+    changes.push({ type: 'indexed', summary: `Initial index. Status: ${context.jira.status}. ${relatedKeys.length} related, ${repoBranches.length} repos, ${articles.length} articles.` });
+  } else {
+    if (prev.jira.status !== context.jira.status) changes.push({ type: 'status-change', summary: `Status changed: ${prev.jira.status} → ${context.jira.status}` });
+    if (prev.jira.commentsCount !== context.jira.commentsCount) changes.push({ type: 'new-comment', summary: `Comments: ${prev.jira.commentsCount} → ${context.jira.commentsCount}` });
+    // Article version changes
+    const prevArts = cacheRead(ticketId, 'articles.json') || [];
+    articles.forEach(a => {
+      const old = prevArts.find(p => p.id === a.id);
+      if (old && old.version !== a.version) changes.push({ type: 'article-updated', summary: `Confluence "${a.title}" updated (v${old.version} → v${a.version})` });
+    });
+    // New repos/branches
+    const prevRepos = cacheRead(ticketId, 'repos.json') || [];
+    repoBranches.forEach(r => {
+      const old = prevRepos.find(p => p.repo === r.repo);
+      if (!old) changes.push({ type: 'new-repo', summary: `Bitbucket: new repo found: ${r.repo}` });
+      else {
+        const newPRs = (r.prs || []).filter(p => !(old.prs || []).find(op => op.id === p.id));
+        newPRs.forEach(p => changes.push({ type: 'new-pr', summary: `Bitbucket: new PR in ${r.repo}: "${p.title}"` }));
+      }
+    });
+    if (!changes.length) changes.push({ type: 'sync', summary: 'No changes detected.' });
+  }
+  changes.forEach(c => cacheAppendTimeline(ticketId, c));
+  return context;
+}
+
 // ── Tool definitions ───────────────────────────────────────────────────────────
 const TOOLS = [
   // ── Jira ────────────────────────────────────────────────────────────────────
@@ -620,6 +807,46 @@ const TOOLS = [
   {
     name: 'bitbucket_list_workspace_members',
     description: 'List members of the Bitbucket workspace.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+
+  // ── Knowledge Cache ───────────────────────────────────────────────────────────
+  {
+    name: 'mcp_index_ticket',
+    description: 'Deep-index a ticket into the MCP local cache. Fetches full Jira context, discovers related Bitbucket repos/branches/PRs and Confluence articles, and stores everything locally. Run once per ticket; subsequent calls do incremental updates and log changes to timeline.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: { type: 'string', description: 'Ticket key, e.g. B2BBE-123' }
+      },
+      required: ['ticketId']
+    }
+  },
+  {
+    name: 'mcp_get_ticket_context',
+    description: 'Return the full cached context for a ticket: Jira details, related tickets, Bitbucket branches/PRs, Confluence articles, and change timeline. No API calls — reads local cache only. Fast.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: { type: 'string', description: 'Ticket key, e.g. B2BBE-123' }
+      },
+      required: ['ticketId']
+    }
+  },
+  {
+    name: 'mcp_sync_active_tickets',
+    description: 'Re-index all ACTIVE_TICKETS configured in .env. Detects and logs: status changes, new comments, Confluence article updates, new PRs/branches. Runs automatically daily; call manually to force a refresh.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
+  },
+  {
+    name: 'mcp_list_cached_tickets',
+    description: 'List all tickets currently in the local MCP cache with their status, last-indexed date, and change count.',
     inputSchema: {
       type: 'object',
       properties: {}
@@ -1604,6 +1831,65 @@ function dispatchTool(id, name, args, respondFn) {
       });
     }
 
+    // ── Knowledge Cache tools ────────────────────────────────────────────────────
+    case 'mcp_index_ticket': {
+      const ticketId = (args.ticketId || '').toUpperCase().trim();
+      if (!ticketId) return sendError(id, new Error('ticketId is required'));
+      (async () => {
+        try {
+          await indexTicket(ticketId);
+          sendText(id, formatTicketContext(ticketId));
+        } catch (err) { sendError(id, err); }
+      })();
+      break;
+    }
+
+    case 'mcp_get_ticket_context': {
+      const ticketId = (args.ticketId || '').toUpperCase().trim();
+      if (!ticketId) return sendError(id, new Error('ticketId is required'));
+      sendText(id, formatTicketContext(ticketId));
+      break;
+    }
+
+    case 'mcp_sync_active_tickets': {
+      (async () => {
+        const active = (process.env.ACTIVE_TICKETS || '').split(',').map(t => t.trim()).filter(Boolean);
+        if (!active.length) return sendText(id, 'No ACTIVE_TICKETS configured. Add tickets in the MCP UI → Dashboard.');
+        const results = [];
+        for (const ticketId of active) {
+          try {
+            await indexTicket(ticketId);
+            const tl = cacheRead(ticketId, 'timeline.json') || [];
+            results.push(`✓ ${ticketId}: ${tl[0]?.summary || 'synced'}`);
+          } catch (err) {
+            results.push(`✗ ${ticketId}: ${err.message}`);
+          }
+        }
+        sendText(id, `Sync complete (${active.length} tickets):\n\n${results.join('\n')}`);
+      })();
+      break;
+    }
+
+    case 'mcp_list_cached_tickets': {
+      try {
+        if (!fs.existsSync(CACHE_DIR)) return sendText(id, 'Cache is empty. Run mcp_index_ticket to start indexing.');
+        const dirs = fs.readdirSync(CACHE_DIR).filter(d => fs.statSync(path.join(CACHE_DIR, d)).isDirectory());
+        if (!dirs.length) return sendText(id, 'Cache is empty. Run mcp_index_ticket to start indexing.');
+        const rows = dirs.map(ticketId => {
+          const ctx = cacheRead(ticketId, 'context.json');
+          const tl  = cacheRead(ticketId, 'timeline.json') || [];
+          const repos = cacheRead(ticketId, 'repos.json') || [];
+          const arts  = cacheRead(ticketId, 'articles.json') || [];
+          const rel   = cacheRead(ticketId, 'related.json') || [];
+          return `**${ticketId}** [${ctx?.jira?.status || '?'}] ${ctx?.jira?.summary || '(no context)'}
+  • Indexed: ${ctx?.indexedAt?.slice(0, 16) || '?'} | Repos: ${repos.length} | Articles: ${arts.length} | Related: ${rel.length} | Timeline entries: ${tl.length}
+  • Last change: ${tl[0]?.date?.slice(0, 16) || '?'} — ${tl[0]?.summary || ''}`;
+        });
+        sendText(id, `Cached tickets (${dirs.length}):\n\n${rows.join('\n\n')}`);
+      } catch (err) { sendError(id, err); }
+      break;
+    }
+
     // ── Meta tools ──────────────────────────────────────────────────────────────
     case 'mcp_get_agent_context': {
       const templatePath = require('path').join(__dirname, 'agents', 'agents-template.md');
@@ -1697,3 +1983,26 @@ function stripHtml(html) {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
+
+// ── Background sync — runs on startup + every 24 h ───────────────────────────
+async function runBackgroundSync() {
+  const active = (process.env.ACTIVE_TICKETS || '').split(',').map(t => t.trim()).filter(Boolean);
+  if (!active.length) return;
+  process.stderr.write(`[sync] Starting background sync for ${active.length} active ticket(s)...\n`);
+  for (const ticketId of active) {
+    try {
+      await indexTicket(ticketId);
+      const tl = cacheRead(ticketId, 'timeline.json') || [];
+      process.stderr.write(`[sync] ✓ ${ticketId}: ${tl[0]?.summary || 'ok'}\n`);
+    } catch (err) {
+      process.stderr.write(`[sync] ✗ ${ticketId}: ${err.message}\n`);
+    }
+  }
+  process.stderr.write('[sync] Done.\n');
+}
+
+// Delay first sync 10 s after startup (let server stabilise), then every 24 h
+setTimeout(() => {
+  runBackgroundSync();
+  setInterval(runBackgroundSync, 24 * 60 * 60 * 1000);
+}, 10000);
