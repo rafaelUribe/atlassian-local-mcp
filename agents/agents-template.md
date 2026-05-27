@@ -110,7 +110,17 @@ Before doing anything else, verify the local agent infrastructure exists in this
      if ($content -notcontains $e) { Add-Content $exclude $e }
    }
    ```
-3. **This step is idempotent** — safe to run every time. If everything already exists, it does nothing.
+3. **Create `.agents/config.json` if it doesn't exist** (project-specific settings):
+   ```json
+   {
+     "baseBranches": ["develop", "test"],
+     "branchPrefix": "task/"
+   }
+   ```
+   - `baseBranches`: branches to pull before starting work (in order). **Adjust per project** (e.g. `["main"]`, `["develop", "staging"]`).
+   - `branchPrefix`: prefix for new feature branches (e.g. `task/`, `feature/`, `bugfix/`).
+   - If the file already exists, do not overwrite it.
+4. **This step is idempotent** — safe to run every time. If everything already exists, it does nothing.
 
 ### Step 1 — File Verification (cache-first)
 
@@ -135,13 +145,15 @@ Create `.agents/[TICKET_ID].md` with this structured data.
 
 ### Step 4 — Git Automation (requires confirmation)
 
+**Read `.agents/config.json`** to get `baseBranches` and `branchPrefix`. If the file doesn't exist or is missing fields, use defaults: `baseBranches = ["develop", "test"]`, `branchPrefix = "task/"`.
+
 **Before executing any git command, present the plan to the user and ask for explicit confirmation:**
 
 ```
 I will perform the following git operations:
   1. Stash uncommitted changes (if any)
-  2. Pull latest from develop (and test if it exists)
-  3. [Create / Switch to] branch task/[TICKET_ID]
+  2. Pull latest from: [list baseBranches from config]
+  3. [Create / Switch to] branch {branchPrefix}[TICKET_ID]
 
 Proceed? (y/n)
 ```
@@ -153,15 +165,16 @@ Proceed? (y/n)
 git status --porcelain
 # If dirty: git stash push -m "auto-stash before [TICKET_ID]"
 
-# 2. Sync base branches
-git checkout develop && git pull
-git checkout test    && git pull   # skip if 'test' branch doesn't exist
+# 2. Sync base branches (from config.baseBranches)
+# For each branch in baseBranches:
+#   git checkout <branch> && git pull
+#   (skip silently if branch doesn't exist locally or remotely)
 
-# 3. Branch control
-# If task/[TICKET_ID] already exists locally or remotely:
-git checkout task/[TICKET_ID] && git merge develop
+# 3. Branch control (using config.branchPrefix, default "task/")
+# If {branchPrefix}[TICKET_ID] already exists locally or remotely:
+git checkout {branchPrefix}[TICKET_ID] && git merge <first baseBranch>
 # If it does NOT exist:
-git checkout develop && git checkout -b task/[TICKET_ID]
+git checkout <first baseBranch> && git checkout -b {branchPrefix}[TICKET_ID]
 ```
 
 If the user declines, skip git operations and proceed to Step 5 with the context already loaded.
