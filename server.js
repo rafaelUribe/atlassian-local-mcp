@@ -9,86 +9,92 @@ const ATLASSIAN_EMAIL = process.env.JIRA_EMAIL;
 const ATLASSIAN_TOKEN = process.env.JIRA_TOKEN;
 const BITBUCKET_WORKSPACE = process.env.BITBUCKET_WORKSPACE;
 
-if (!ATLASSIAN_HOST || !ATLASSIAN_EMAIL || !ATLASSIAN_TOKEN) {
-  process.stderr.write('ERROR: Faltan variables JIRA_HOST, JIRA_EMAIL o JIRA_TOKEN en .env\n');
+const missing = [];
+if (!ATLASSIAN_HOST) missing.push('JIRA_HOST');
+if (!ATLASSIAN_EMAIL) missing.push('JIRA_EMAIL');
+if (!ATLASSIAN_TOKEN) missing.push('JIRA_TOKEN');
+if (missing.length) {
+  process.stderr.write(`ERROR: Missing required env vars in .env: ${missing.join(', ')}\n`);
+  process.stderr.write('       Copy .env.example to .env and fill in your credentials.\n');
   process.exit(1);
 }
 
 const auth = Buffer.from(`${ATLASSIAN_EMAIL}:${ATLASSIAN_TOKEN}`).toString('base64');
+const MAX_BODY_SIZE = 1024 * 1024; // 1 MB max request body
 
 // ── Tool definitions ───────────────────────────────────────────────────────────
 const TOOLS = [
   // ── Jira ────────────────────────────────────────────────────────────────────
   {
     name: 'jira_search_tickets',
-    description: 'Busca incidencias en Jira usando una consulta JQL. Devuelve clave, resumen, estado, prioridad y asignado.',
+    description: 'Search Jira issues using a JQL query. Returns key, summary, status, priority and assignee.',
     inputSchema: {
       type: 'object',
       properties: {
-        jql: { type: 'string', description: 'Consulta JQL, p.ej. "project = ORA AND status = Open"' },
-        maxResults: { type: 'number', description: 'Máximo de resultados (default 10, máx 50)' }
+        jql: { type: 'string', description: 'JQL query, e.g. "project = ACME AND status = Open"' },
+        maxResults: { type: 'number', description: 'Max results (default 10, max 50)' }
       },
       required: ['jql']
     }
   },
   {
     name: 'jira_get_ticket',
-    description: 'Obtiene todos los detalles de un ticket Jira por su clave (p.ej. ORA-123): descripción, comentarios, subtareas, etiquetas, sprint y más.',
+    description: 'Get full details of a Jira ticket by key (e.g. ACME-123): description, comments, subtasks, labels, sprint, and more.',
     inputSchema: {
       type: 'object',
       properties: {
-        key: { type: 'string', description: 'Clave del ticket, p.ej. ORA-123' }
+        key: { type: 'string', description: 'Ticket key, e.g. ACME-123' }
       },
       required: ['key']
     }
   },
   {
     name: 'jira_get_my_tickets',
-    description: 'Lista los tickets asignados al usuario configurado en .env que están en curso o pendientes.',
+    description: 'List tickets assigned to the configured user that are in progress or pending.',
     inputSchema: {
       type: 'object',
       properties: {
-        status: { type: 'string', description: 'Filtrar por estado (opcional), p.ej. "In Progress"' }
+        status: { type: 'string', description: 'Filter by status (optional), e.g. "In Progress"' }
       }
     }
   },
   {
     name: 'jira_get_projects',
-    description: 'Lista todos los proyectos Jira disponibles con su clave y nombre.',
+    description: 'List all available Jira projects with their key and name.',
     inputSchema: { type: 'object', properties: {} }
   },
   {
     name: 'jira_get_sprints',
-    description: 'Lista los sprints de un board/proyecto Jira.',
+    description: 'List sprints for a Jira board.',
     inputSchema: {
       type: 'object',
       properties: {
-        boardId: { type: 'number', description: 'ID del board de Jira' },
-        state: { type: 'string', description: 'Estado del sprint: active | future | closed (default: active)' }
+        boardId: { type: 'number', description: 'Jira board ID' },
+        state: { type: 'string', description: 'Sprint state: active | future | closed (default: active)' }
       },
       required: ['boardId']
     }
   },
   {
     name: 'jira_add_comment',
-    description: 'Agrega un comentario de texto a un ticket Jira.',
+    description: 'Add a text comment to a Jira ticket.',
     inputSchema: {
       type: 'object',
       properties: {
-        key: { type: 'string', description: 'Clave del ticket, p.ej. ORA-123' },
-        comment: { type: 'string', description: 'Texto del comentario' }
+        key: { type: 'string', description: 'Ticket key, e.g. ACME-123' },
+        comment: { type: 'string', description: 'Comment text' }
       },
       required: ['key', 'comment']
     }
   },
   {
     name: 'jira_transition_ticket',
-    description: 'Cambia el estado de un ticket Jira (p.ej. moverlo a "In Progress" o "Done").',
+    description: 'Transition a Jira ticket to a new status (e.g. "In Progress" or "Done").',
     inputSchema: {
       type: 'object',
       properties: {
-        key: { type: 'string', description: 'Clave del ticket' },
-        transitionName: { type: 'string', description: 'Nombre de la transición, p.ej. "In Progress", "Done", "To Do"' }
+        key: { type: 'string', description: 'Ticket key' },
+        transitionName: { type: 'string', description: 'Transition name, e.g. "In Progress", "Done", "To Do"' }
       },
       required: ['key', 'transitionName']
     }
@@ -97,67 +103,67 @@ const TOOLS = [
   // ── Confluence ───────────────────────────────────────────────────────────────
   {
     name: 'confluence_search',
-    description: 'Busca páginas y contenido en Confluence usando una consulta CQL. Devuelve título, espacio y URL.',
+    description: 'Search Confluence pages and content using a CQL query. Returns title, space and URL.',
     inputSchema: {
       type: 'object',
       properties: {
         cql: { type: 'string', description: 'Consulta CQL, p.ej. "type=page AND space=ENG AND text~\\"deploy\\""' },
-        maxResults: { type: 'number', description: 'Máximo de resultados (default 10, máx 50)' }
+        maxResults: { type: 'number', description: 'Max results (default 10, max 50)' }
       },
       required: ['cql']
     }
   },
   {
     name: 'confluence_get_page',
-    description: 'Obtiene el contenido completo de una página de Confluence por su ID.',
+    description: 'Get full content of a Confluence page by ID.',
     inputSchema: {
       type: 'object',
       properties: {
-        pageId: { type: 'string', description: 'ID numérico de la página, p.ej. "123456"' }
+        pageId: { type: 'string', description: 'Numeric page ID, e.g. "123456"' }
       },
       required: ['pageId']
     }
   },
   {
     name: 'confluence_get_spaces',
-    description: 'Lista todos los espacios de Confluence disponibles con su clave y nombre.',
+    description: 'List all available Confluence spaces with their key and name.',
     inputSchema: { type: 'object', properties: {} }
   },
   {
     name: 'confluence_get_space_pages',
-    description: 'Lista las páginas de un espacio de Confluence.',
+    description: 'List pages in a Confluence space.',
     inputSchema: {
       type: 'object',
       properties: {
-        spaceKey: { type: 'string', description: 'Clave del espacio, p.ej. "ENG" o "TEAM"' },
-        limit: { type: 'number', description: 'Máximo de páginas a devolver (default 20, máx 50)' }
+        spaceKey: { type: 'string', description: 'Space key, e.g. "ENG" or "TEAM"' },
+        limit: { type: 'number', description: 'Max pages to return (default 20, max 50)' }
       },
       required: ['spaceKey']
     }
   },
   {
     name: 'confluence_create_page',
-    description: 'Crea una nueva página en Confluence dentro de un espacio dado.',
+    description: 'Create a new page in Confluence within a given space.',
     inputSchema: {
       type: 'object',
       properties: {
-        spaceKey: { type: 'string', description: 'Clave del espacio donde crear la página' },
-        title: { type: 'string', description: 'Título de la nueva página' },
-        content: { type: 'string', description: 'Contenido en HTML o texto plano' },
-        parentId: { type: 'string', description: 'ID de la página padre (opcional)' }
+        spaceKey: { type: 'string', description: 'Space key where to create the page' },
+        title: { type: 'string', description: 'Title of the new page' },
+        content: { type: 'string', description: 'Content in HTML or plain text' },
+        parentId: { type: 'string', description: 'Parent page ID (optional)' }
       },
       required: ['spaceKey', 'title', 'content']
     }
   },
   {
     name: 'confluence_update_page',
-    description: 'Actualiza el contenido de una página existente en Confluence.',
+    description: 'Update the content of an existing Confluence page.',
     inputSchema: {
       type: 'object',
       properties: {
-        pageId: { type: 'string', description: 'ID de la página a actualizar' },
-        title: { type: 'string', description: 'Nuevo título (si se omite, se mantiene el actual)' },
-        content: { type: 'string', description: 'Nuevo contenido en HTML o texto plano' }
+        pageId: { type: 'string', description: 'Page ID to update' },
+        title: { type: 'string', description: 'New title (if omitted, keeps current)' },
+        content: { type: 'string', description: 'New content in HTML or plain text' }
       },
       required: ['pageId', 'content']
     }
@@ -166,158 +172,158 @@ const TOOLS = [
   // ── Jira — nuevos ────────────────────────────────────────────────────────────
   {
     name: 'jira_get_boards',
-    description: 'Lista los boards (Scrum/Kanban) de Jira. Útil para obtener el boardId necesario en jira_get_sprints.',
+    description: 'List Jira boards (Scrum/Kanban). Useful to get the boardId for jira_get_sprints.',
     inputSchema: {
       type: 'object',
       properties: {
-        projectKey: { type: 'string', description: 'Filtrar por clave de proyecto (opcional), p.ej. "B2BBE"' },
-        maxResults: { type: 'number', description: 'Máximo de resultados (default 20)' }
+        projectKey: { type: 'string', description: 'Filter by project key (optional), e.g. "ACME"' },
+        maxResults: { type: 'number', description: 'Max results (default 20)' }
       }
     }
   },
   {
     name: 'jira_get_sprint_tickets',
-    description: 'Lista los tickets del sprint activo (u otro estado) de un board de Jira.',
+    description: 'List tickets from the active sprint (or other state) of a Jira board.',
     inputSchema: {
       type: 'object',
       properties: {
-        boardId: { type: 'number', description: 'ID del board de Jira' },
-        sprintId: { type: 'number', description: 'ID del sprint (opcional; si se omite usa el sprint activo)' }
+        boardId: { type: 'number', description: 'Jira board ID' },
+        sprintId: { type: 'number', description: 'Sprint ID (optional; if omitted uses the active sprint)' }
       },
       required: ['boardId']
     }
   },
   {
     name: 'jira_create_ticket',
-    description: 'Crea un nuevo ticket (issue) en Jira.',
+    description: 'Create a new Jira ticket (issue).',
     inputSchema: {
       type: 'object',
       properties: {
-        projectKey:  { type: 'string',  description: 'Clave del proyecto, p.ej. "B2BBE"' },
-        summary:     { type: 'string',  description: 'Resumen / título del ticket' },
-        issueType:   { type: 'string',  description: 'Tipo: Story | Task | Bug | Sub-task (default: Task)' },
-        description: { type: 'string',  description: 'Descripción en texto plano (opcional)' },
-        priority:    { type: 'string',  description: 'Prioridad: Highest | High | Medium | Low | Lowest (opcional)' },
-        assignee:    { type: 'string',  description: 'Account ID o email del asignado (opcional)' },
-        labels:      { type: 'array', items: { type: 'string' }, description: 'Etiquetas (opcional)' },
-        parentKey:   { type: 'string',  description: 'Clave del ticket padre si es Sub-task (opcional)' }
+        projectKey:  { type: 'string',  description: 'Project key, e.g. "ACME"' },
+        summary:     { type: 'string',  description: 'Summary / title of the ticket' },
+        issueType:   { type: 'string',  description: 'Type: Story | Task | Bug | Sub-task (default: Task)' },
+        description: { type: 'string',  description: 'Description in plain text (optional)' },
+        priority:    { type: 'string',  description: 'Priority: Highest | High | Medium | Low | Lowest (optional)' },
+        assignee:    { type: 'string',  description: 'Account ID or email of the assignee (optional)' },
+        labels:      { type: 'array', items: { type: 'string' }, description: 'Labels (optional)' },
+        parentKey:   { type: 'string',  description: 'Ticket key padre si es Sub-task (opcional)' }
       },
       required: ['projectKey', 'summary']
     }
   },
   {
     name: 'jira_update_ticket',
-    description: 'Actualiza campos de un ticket Jira existente (resumen, descripción, prioridad, asignado, etiquetas).',
+    description: 'Update fields of an existing Jira ticket (summary, description, priority, assignee, labels).',
     inputSchema: {
       type: 'object',
       properties: {
-        key:         { type: 'string', description: 'Clave del ticket, p.ej. "B2BBE-123"' },
-        summary:     { type: 'string', description: 'Nuevo resumen (opcional)' },
-        description: { type: 'string', description: 'Nueva descripción en texto plano (opcional)' },
-        priority:    { type: 'string', description: 'Nueva prioridad (opcional)' },
-        assignee:    { type: 'string', description: 'Account ID o email del nuevo asignado (opcional)' },
-        labels:      { type: 'array', items: { type: 'string' }, description: 'Nuevas etiquetas (reemplaza las actuales)' }
+        key:         { type: 'string', description: 'Ticket key, p.ej. "B2BBE-123"' },
+        summary:     { type: 'string', description: 'New summary (optional)' },
+        description: { type: 'string', description: 'New description in plain text (optional)' },
+        priority:    { type: 'string', description: 'New priority (optional)' },
+        assignee:    { type: 'string', description: 'Account ID or email of the new assignee (optional)' },
+        labels:      { type: 'array', items: { type: 'string' }, description: 'New labels (replaces current ones)' }
       },
       required: ['key']
     }
   },
   {
     name: 'jira_get_transitions',
-    description: 'Lista las transiciones disponibles para un ticket Jira (estados a los que se puede mover).',
+    description: 'List available transitions for a Jira ticket (statuses it can move to).',
     inputSchema: {
       type: 'object',
       properties: {
-        key: { type: 'string', description: 'Clave del ticket, p.ej. "B2BBE-123"' }
+        key: { type: 'string', description: 'Ticket key, p.ej. "B2BBE-123"' }
       },
       required: ['key']
     }
   },
   {
     name: 'jira_delete_comment',
-    description: 'Elimina un comentario de un ticket Jira.',
+    description: 'Delete a comment from a Jira ticket.',
     inputSchema: {
       type: 'object',
       properties: {
-        key:       { type: 'string', description: 'Clave del ticket' },
-        commentId: { type: 'string', description: 'ID del comentario a eliminar' }
+        key:       { type: 'string', description: 'Ticket key' },
+        commentId: { type: 'string', description: 'Comment ID to delete' }
       },
       required: ['key', 'commentId']
     }
   },
   {
     name: 'jira_get_issue_types',
-    description: 'Lista los tipos de issue disponibles en un proyecto Jira (Story, Bug, Task, Sub-task, etc.).',
+    description: 'List available issue types in a Jira project (Story, Bug, Task, Sub-task, etc.).',
     inputSchema: {
       type: 'object',
       properties: {
-        projectKey: { type: 'string', description: 'Clave del proyecto (opcional; sin clave devuelve todos los tipos globales)' }
+        projectKey: { type: 'string', description: 'Project key (optional; without key returns all global types)' }
       }
     }
   },
   {
     name: 'jira_link_issues',
-    description: 'Crea un enlace entre dos tickets Jira (p.ej. "blocks", "is blocked by", "relates to").',
+    description: 'Create a link between two Jira tickets (e.g. "blocks", "is blocked by", "relates to").',
     inputSchema: {
       type: 'object',
       properties: {
-        inwardKey:  { type: 'string', description: 'Clave del ticket origen' },
-        outwardKey: { type: 'string', description: 'Clave del ticket destino' },
-        linkType:   { type: 'string', description: 'Tipo de enlace, p.ej. "Blocks", "Relates", "Cloners" (default: "Relates")' }
+        inwardKey:  { type: 'string', description: 'Ticket key origen' },
+        outwardKey: { type: 'string', description: 'Ticket key destino' },
+        linkType:   { type: 'string', description: 'Link type, e.g. "Blocks", "Relates", "Cloners" (default: "Relates")' }
       },
       required: ['inwardKey', 'outwardKey']
     }
   },
   {
     name: 'jira_get_link_types',
-    description: 'Lista todos los tipos de enlace disponibles en Jira.',
+    description: 'List all available link types in Jira.',
     inputSchema: { type: 'object', properties: {} }
   },
   {
     name: 'jira_get_user',
-    description: 'Busca usuarios en Jira por nombre o email. Útil para obtener accountId para asignaciones.',
+    description: 'Search Jira users by name or email. Useful to get accountId for assignments.',
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Nombre o email del usuario a buscar' }
+        query: { type: 'string', description: 'User name or email to search' }
       },
       required: ['query']
     }
   },
   {
     name: 'jira_get_fields',
-    description: 'Lista todos los campos personalizados disponibles en Jira.',
+    description: 'List all custom fields available in Jira.',
     inputSchema: { type: 'object', properties: {} }
   },
   {
     name: 'jira_get_project_components',
-    description: 'Lista los componentes de un proyecto Jira.',
+    description: 'List components of a Jira project.',
     inputSchema: {
       type: 'object',
       properties: {
-        projectKey: { type: 'string', description: 'Clave del proyecto' }
+        projectKey: { type: 'string', description: 'Project key' }
       },
       required: ['projectKey']
     }
   },
   {
     name: 'jira_get_project_versions',
-    description: 'Lista las versiones (Fix Versions) de un proyecto Jira.',
+    description: 'List versions (Fix Versions) of a Jira project.',
     inputSchema: {
       type: 'object',
       properties: {
-        projectKey: { type: 'string', description: 'Clave del proyecto' }
+        projectKey: { type: 'string', description: 'Project key' }
       },
       required: ['projectKey']
     }
   },
   {
     name: 'jira_get_changelogs',
-    description: 'Devuelve el historial de cambios (changelog) de un ticket Jira.',
+    description: 'Returns the change history (changelog) of a Jira ticket.',
     inputSchema: {
       type: 'object',
       properties: {
-        key: { type: 'string', description: 'Clave del ticket' },
-        maxResults: { type: 'number', description: 'Últimos N cambios (default 10)' }
+        key: { type: 'string', description: 'Ticket key' },
+        maxResults: { type: 'number', description: 'Last N changes (default 10)' }
       },
       required: ['key']
     }
@@ -326,80 +332,80 @@ const TOOLS = [
   // ── Confluence — nuevos ───────────────────────────────────────────────────────
   {
     name: 'confluence_delete_page',
-    description: 'Elimina una página de Confluence por su ID.',
+    description: 'Delete a Confluence page by ID.',
     inputSchema: {
       type: 'object',
       properties: {
-        pageId: { type: 'string', description: 'ID de la página a eliminar' }
+        pageId: { type: 'string', description: 'Page ID to delete' }
       },
       required: ['pageId']
     }
   },
   {
     name: 'confluence_get_page_children',
-    description: 'Lista las páginas hijas de una página de Confluence.',
+    description: 'List child pages of a Confluence page.',
     inputSchema: {
       type: 'object',
       properties: {
-        pageId: { type: 'string', description: 'ID de la página padre' },
-        limit:  { type: 'number', description: 'Máximo de resultados (default 25)' }
+        pageId: { type: 'string', description: 'Parent page ID' },
+        limit:  { type: 'number', description: 'Max results (default 25)' }
       },
       required: ['pageId']
     }
   },
   {
     name: 'confluence_add_comment',
-    description: 'Agrega un comentario a una página de Confluence.',
+    description: 'Add a comment to a Confluence page.',
     inputSchema: {
       type: 'object',
       properties: {
-        pageId:  { type: 'string', description: 'ID de la página' },
-        comment: { type: 'string', description: 'Texto del comentario' }
+        pageId:  { type: 'string', description: 'Page ID' },
+        comment: { type: 'string', description: 'Comment text' }
       },
       required: ['pageId', 'comment']
     }
   },
   {
     name: 'confluence_get_page_comments',
-    description: 'Lista los comentarios de una página de Confluence.',
+    description: 'List comments on a Confluence page.',
     inputSchema: {
       type: 'object',
       properties: {
-        pageId: { type: 'string', description: 'ID de la página' }
+        pageId: { type: 'string', description: 'Page ID' }
       },
       required: ['pageId']
     }
   },
   {
     name: 'confluence_get_page_labels',
-    description: 'Lista las etiquetas (labels) de una página de Confluence.',
+    description: 'List labels of a Confluence page.',
     inputSchema: {
       type: 'object',
       properties: {
-        pageId: { type: 'string', description: 'ID de la página' }
+        pageId: { type: 'string', description: 'Page ID' }
       },
       required: ['pageId']
     }
   },
   {
     name: 'confluence_add_page_label',
-    description: 'Agrega una etiqueta (label) a una página de Confluence.',
+    description: 'Add a label to a Confluence page.',
     inputSchema: {
       type: 'object',
       properties: {
-        pageId: { type: 'string', description: 'ID de la página' },
-        label:  { type: 'string', description: 'Etiqueta a agregar' }
+        pageId: { type: 'string', description: 'Page ID' },
+        label:  { type: 'string', description: 'Label to add' }
       },
       required: ['pageId', 'label']
     }
   },
   {
     name: 'confluence_get_page_attachments',
-    description: 'Lista los adjuntos de una página de Confluence.',
+    description: 'List attachments of a Confluence page.',
     inputSchema: {
       type: 'object',
       properties: {
-        pageId: { type: 'string', description: 'ID de la página' }
+        pageId: { type: 'string', description: 'Page ID' }
       },
       required: ['pageId']
     }
@@ -408,206 +414,206 @@ const TOOLS = [
   // ── Bitbucket ────────────────────────────────────────────────────────────────
   {
     name: 'bitbucket_get_repos',
-    description: 'Lista los repositorios del workspace de Bitbucket configurado en BITBUCKET_WORKSPACE.',
+    description: 'List repositories in the Bitbucket workspace configured via BITBUCKET_WORKSPACE.',
     inputSchema: {
       type: 'object',
       properties: {
-        filter: { type: 'string', description: 'Filtro opcional por nombre de repositorio' }
+        filter: { type: 'string', description: 'Optional filter by repository name' }
       }
     }
   },
   {
     name: 'bitbucket_get_pull_requests',
-    description: 'Lista los pull requests de un repositorio de Bitbucket.',
+    description: 'List pull requests of a Bitbucket repository.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo: { type: 'string', description: 'Slug del repositorio, p.ej. "my-service"' },
-        state: { type: 'string', description: 'Estado: OPEN | MERGED | DECLINED | SUPERSEDED (default: OPEN)' }
+        repo: { type: 'string', description: 'Repository slug, e.g. "my-service"' },
+        state: { type: 'string', description: 'State: OPEN | MERGED | DECLINED | SUPERSEDED (default: OPEN)' }
       },
       required: ['repo']
     }
   },
   {
     name: 'bitbucket_get_pull_request',
-    description: 'Obtiene los detalles completos de un pull request específico de Bitbucket.',
+    description: 'Get full details of a specific Bitbucket pull request.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo: { type: 'string', description: 'Slug del repositorio' },
-        prId: { type: 'number', description: 'ID numérico del pull request' }
+        repo: { type: 'string', description: 'Repository slug' },
+        prId: { type: 'number', description: 'Numeric pull request ID' }
       },
       required: ['repo', 'prId']
     }
   },
   {
     name: 'bitbucket_create_pull_request',
-    description: 'Crea un nuevo pull request en un repositorio de Bitbucket.',
+    description: 'Create a new pull request in a Bitbucket repository.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo: { type: 'string', description: 'Slug del repositorio' },
-        title: { type: 'string', description: 'Título del pull request' },
-        sourceBranch: { type: 'string', description: 'Rama de origen' },
-        targetBranch: { type: 'string', description: 'Rama de destino (default: main o master)' },
-        description: { type: 'string', description: 'Descripción del pull request (opcional)' },
-        reviewers: { type: 'array', items: { type: 'string' }, description: 'Lista de usernames de revisores (opcional)' }
+        repo: { type: 'string', description: 'Repository slug' },
+        title: { type: 'string', description: 'Pull request title' },
+        sourceBranch: { type: 'string', description: 'Source branch' },
+        targetBranch: { type: 'string', description: 'Target branch (default: main or master)' },
+        description: { type: 'string', description: 'Pull request description (optional)' },
+        reviewers: { type: 'array', items: { type: 'string' }, description: 'List of reviewer usernames (optional)' }
       },
       required: ['repo', 'title', 'sourceBranch']
     }
   },
   {
     name: 'bitbucket_add_pr_comment',
-    description: 'Agrega un comentario a un pull request de Bitbucket.',
+    description: 'Add a comment to a Bitbucket pull request.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo: { type: 'string', description: 'Slug del repositorio' },
-        prId: { type: 'number', description: 'ID del pull request' },
-        comment: { type: 'string', description: 'Texto del comentario' }
+        repo: { type: 'string', description: 'Repository slug' },
+        prId: { type: 'number', description: 'Pull request ID' },
+        comment: { type: 'string', description: 'Comment text' }
       },
       required: ['repo', 'prId', 'comment']
     }
   },
   {
     name: 'bitbucket_get_branches',
-    description: 'Lista las ramas de un repositorio de Bitbucket.',
+    description: 'List branches of a Bitbucket repository.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo: { type: 'string', description: 'Slug del repositorio' },
-        filter: { type: 'string', description: 'Filtro opcional por nombre de rama' }
+        repo: { type: 'string', description: 'Repository slug' },
+        filter: { type: 'string', description: 'Optional filter by branch name' }
       },
       required: ['repo']
     }
   },
   {
     name: 'bitbucket_get_commits',
-    description: 'Lista los commits de una rama de Bitbucket.',
+    description: 'List commits from a Bitbucket branch.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo:    { type: 'string', description: 'Slug del repositorio' },
-        branch:  { type: 'string', description: 'Nombre de la rama (opcional; si se omite, rama por defecto)' },
-        limit:   { type: 'number', description: 'Máximo de commits a devolver (default 20)' }
+        repo:    { type: 'string', description: 'Repository slug' },
+        branch:  { type: 'string', description: 'Branch name (optional; if omitted, default branch)' },
+        limit:   { type: 'number', description: 'Max commits to return (default 20)' }
       },
       required: ['repo']
     }
   },
   {
     name: 'bitbucket_get_diff',
-    description: 'Obtiene el diff de un pull request de Bitbucket.',
+    description: 'Get the diff of a Bitbucket pull request.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo:  { type: 'string', description: 'Slug del repositorio' },
-        prId:  { type: 'number', description: 'ID del pull request' }
+        repo:  { type: 'string', description: 'Repository slug' },
+        prId:  { type: 'number', description: 'Pull request ID' }
       },
       required: ['repo', 'prId']
     }
   },
   {
     name: 'bitbucket_approve_pr',
-    description: 'Aprueba un pull request de Bitbucket.',
+    description: 'Approve a Bitbucket pull request.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo:  { type: 'string', description: 'Slug del repositorio' },
-        prId:  { type: 'number', description: 'ID del pull request' }
+        repo:  { type: 'string', description: 'Repository slug' },
+        prId:  { type: 'number', description: 'Pull request ID' }
       },
       required: ['repo', 'prId']
     }
   },
   {
     name: 'bitbucket_unapprove_pr',
-    description: 'Retira la aprobación de un pull request de Bitbucket.',
+    description: 'Remove approval from a Bitbucket pull request.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo:  { type: 'string', description: 'Slug del repositorio' },
-        prId:  { type: 'number', description: 'ID del pull request' }
+        repo:  { type: 'string', description: 'Repository slug' },
+        prId:  { type: 'number', description: 'Pull request ID' }
       },
       required: ['repo', 'prId']
     }
   },
   {
     name: 'bitbucket_merge_pr',
-    description: 'Hace merge de un pull request de Bitbucket.',
+    description: 'Merge a Bitbucket pull request.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo:           { type: 'string', description: 'Slug del repositorio' },
-        prId:           { type: 'number', description: 'ID del pull request' },
-        mergeStrategy:  { type: 'string', description: 'Estrategia: merge_commit | squash | fast_forward (default: merge_commit)' },
-        message:        { type: 'string', description: 'Mensaje del commit de merge (opcional)' }
+        repo:           { type: 'string', description: 'Repository slug' },
+        prId:           { type: 'number', description: 'Pull request ID' },
+        mergeStrategy:  { type: 'string', description: 'Strategy: merge_commit | squash | fast_forward (default: merge_commit)' },
+        message:        { type: 'string', description: 'Merge commit message (optional)' }
       },
       required: ['repo', 'prId']
     }
   },
   {
     name: 'bitbucket_decline_pr',
-    description: 'Rechaza (declina) un pull request de Bitbucket.',
+    description: 'Decline a Bitbucket pull request.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo:  { type: 'string', description: 'Slug del repositorio' },
-        prId:  { type: 'number', description: 'ID del pull request' }
+        repo:  { type: 'string', description: 'Repository slug' },
+        prId:  { type: 'number', description: 'Pull request ID' }
       },
       required: ['repo', 'prId']
     }
   },
   {
     name: 'bitbucket_get_pr_comments',
-    description: 'Lista todos los comentarios de un pull request de Bitbucket.',
+    description: 'List all comments of a Bitbucket pull request.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo:  { type: 'string', description: 'Slug del repositorio' },
-        prId:  { type: 'number', description: 'ID del pull request' }
+        repo:  { type: 'string', description: 'Repository slug' },
+        prId:  { type: 'number', description: 'Pull request ID' }
       },
       required: ['repo', 'prId']
     }
   },
   {
     name: 'bitbucket_get_file',
-    description: 'Obtiene el contenido de un archivo en una rama de Bitbucket.',
+    description: 'Get file content from a Bitbucket branch.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo:   { type: 'string', description: 'Slug del repositorio' },
-        path:   { type: 'string', description: 'Ruta del archivo, p.ej. "src/Main.java"' },
-        branch: { type: 'string', description: 'Rama (default: rama principal del repo)' }
+        repo:   { type: 'string', description: 'Repository slug' },
+        path:   { type: 'string', description: 'File path, e.g. "src/Main.java"' },
+        branch: { type: 'string', description: 'Branch (default: repo main branch)' }
       },
       required: ['repo', 'path']
     }
   },
   {
     name: 'bitbucket_get_pipelines',
-    description: 'Lista las pipelines recientes de un repositorio de Bitbucket.',
+    description: 'List recent pipelines of a Bitbucket repository.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo:   { type: 'string', description: 'Slug del repositorio' },
-        limit:  { type: 'number', description: 'Máximo de pipelines (default 10)' }
+        repo:   { type: 'string', description: 'Repository slug' },
+        limit:  { type: 'number', description: 'Max pipelines (default 10)' }
       },
       required: ['repo']
     }
   },
   {
     name: 'bitbucket_get_pipeline',
-    description: 'Obtiene los detalles de una pipeline específica de Bitbucket.',
+    description: 'Get details of a specific Bitbucket pipeline.',
     inputSchema: {
       type: 'object',
       properties: {
-        repo:       { type: 'string', description: 'Slug del repositorio' },
-        pipelineId: { type: 'string', description: 'UUID o número de la pipeline' }
+        repo:       { type: 'string', description: 'Repository slug' },
+        pipelineId: { type: 'string', description: 'Pipeline UUID or number' }
       },
       required: ['repo', 'pipelineId']
     }
   },
   {
     name: 'bitbucket_list_workspace_members',
-    description: 'Lista los miembros del workspace de Bitbucket.',
+    description: 'List members of the Bitbucket workspace.',
     inputSchema: {
       type: 'object',
       properties: {}
@@ -659,14 +665,37 @@ function startHttpServer(port, bindHost) {
   const server = http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
 
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+
+    // Health check — GET /health or GET /
+    if (req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        status: 'ok',
+        server: 'atlassian-local-mcp',
+        tools: TOOLS.length,
+        uptime: Math.floor(process.uptime())
+      }));
+    }
+
     if (req.method !== 'POST') { res.writeHead(405); return res.end('Method Not Allowed'); }
 
     let body = '';
-    req.on('data', chunk => body += chunk);
+    let size = 0;
+    req.on('data', chunk => {
+      size += chunk.length;
+      if (size > MAX_BODY_SIZE) {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Request body too large' } }));
+        req.destroy();
+        return;
+      }
+      body += chunk;
+    });
     req.on('end', () => {
+      if (size > MAX_BODY_SIZE) return;
       let parsed;
       try { parsed = JSON.parse(body); } catch {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -679,13 +708,24 @@ function startHttpServer(port, bindHost) {
     });
   });
 
+  // Graceful shutdown — cleanup mcp.info on exit
+  const infoPath = path.join(__dirname, 'mcp.info');
+  function shutdown(signal) {
+    process.stderr.write(`\n${signal} received — shutting down...\n`);
+    try { fs.unlinkSync(infoPath); } catch {}
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 3000);
+  }
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+
   server.listen(port, bindHost, () => {
     const displayedHost = bindHost === '0.0.0.0' ? 'localhost' : bindHost;
     const url = `http://${displayedHost}:${port}/`;
     process.stderr.write(`Atlassian MCP HTTP server listening on ${url}\n`);
+    process.stderr.write(`Tools: ${TOOLS.length} | Health: GET ${url}\n`);
 
     // write minimal info file so other agents can discover the MCP URL (no secrets)
-    const infoPath = path.join(__dirname, 'mcp.info');
     const info = { url, host: bindHost, port: Number(port), pid: process.pid, startedAt: new Date().toISOString() };
     try {
       fs.writeFileSync(infoPath, JSON.stringify(info, null, 2), { encoding: 'utf8' });
@@ -713,11 +753,15 @@ function handleRequest(req, respondFn) {
   }
 
   if (req.method === 'tools/call') {
-    const { name, arguments: args = {} } = req.params;
+    const params = req.params || {};
+    const { name, arguments: args = {} } = params;
+    if (!name) {
+      return respondFn(req.id, { isError: true, content: [{ type: 'text', text: 'Missing tool name in params' }] });
+    }
     return dispatchTool(req.id, name, args, respondFn);
   }
 
-  respondFn(req.id, { content: [{ type: 'text', text: `Método desconocido: ${req.method}` }] });
+  respondFn(req.id, { content: [{ type: 'text', text: `Unknown method: ${req.method}` }] });
 }
 
 // ── Tool dispatch ──────────────────────────────────────────────────────────────
@@ -733,13 +777,13 @@ function dispatchTool(id, name, args, respondFn) {
       const searchBody = { jql: args.jql, maxResults: max, fields: ['summary','status','priority','assignee','issuetype'] };
       return fetchAtlassian(`/rest/api/3/search/jql`, 'POST', searchBody, (err, res) => {
         if (err) return sendError(id, err);
-        if (!res.issues?.length) return sendText(id, 'No se encontraron tickets.');
+        if (!res.issues?.length) return sendText(id, 'No tickets found.');
         const lines = res.issues.map(i => {
-          const assignee = i.fields.assignee?.displayName || 'Sin asignar';
+          const assignee = i.fields.assignee?.displayName || 'Unassigned';
           const priority = i.fields.priority?.name || '-';
           return `[${i.key}] ${i.fields.summary}\n  Estado: ${i.fields.status.name} | Prioridad: ${priority} | Asignado: ${assignee}`;
         });
-        sendText(id, `${res.total} resultado(s) (mostrando ${res.issues.length}):\n\n${lines.join('\n\n')}`);
+        sendText(id, `${res.total} result(s) (showing ${res.issues.length}):\n\n${lines.join('\n\n')}`);
       });
     }
 
@@ -753,16 +797,16 @@ function dispatchTool(id, name, args, respondFn) {
           `  [${c.author.displayName}]: ${extractText(c.body)}`
         ).join('\n');
         const subtasks = (f.subtasks || []).map(s => `  • [${s.key}] ${s.fields.summary} (${s.fields.status.name})`).join('\n');
-        const sprint = f.customfield_10020?.find(s => s.state === 'active')?.name || 'Sin sprint activo';
-        const labels = (f.labels || []).join(', ') || 'Ninguna';
+        const sprint = f.customfield_10020?.find(s => s.state === 'active')?.name || 'No active sprint';
+        const labels = (f.labels || []).join(', ') || 'None';
         const out = [
           `[${res.key}] ${f.summary}`,
           `Tipo: ${f.issuetype?.name} | Estado: ${f.status.name} | Prioridad: ${f.priority?.name || '-'}`,
-          `Asignado: ${f.assignee?.displayName || 'Sin asignar'} | Sprint: ${sprint}`,
-          `Etiquetas: ${labels}`,
-          `\nDescripción:\n${desc || '(vacía)'}`,
+          `Asignado: ${f.assignee?.displayName || 'Unassigned'} | Sprint: ${sprint}`,
+          `Labels: ${labels}`,
+          `\nDescription:\n${desc || '(empty)'}`,
           subtasks ? `\nSubtareas:\n${subtasks}` : '',
-          comments ? `\nÚltimos comentarios:\n${comments}` : ''
+          comments ? `\nLatest comments:\n${comments}` : ''
         ].filter(Boolean).join('\n');
         sendText(id, out);
       });
@@ -774,11 +818,11 @@ function dispatchTool(id, name, args, respondFn) {
       const searchBody = { jql, maxResults: 20, fields: ['summary','status','priority','issuetype'] };
       return fetchAtlassian(`/rest/api/3/search/jql`, 'POST', searchBody, (err, res) => {
         if (err) return sendError(id, err);
-        if (!res.issues?.length) return sendText(id, 'No tienes tickets asignados actualmente.');
+        if (!res.issues?.length) return sendText(id, 'No assigned tickets currently.');
         const lines = res.issues.map(i =>
           `[${i.key}] ${i.fields.summary} — ${i.fields.status.name} (${i.fields.issuetype?.name})`
         );
-        sendText(id, `Tus tickets (${res.issues.length}):\n\n${lines.join('\n')}`);
+        sendText(id, `Your tickets (${res.issues.length}):\n\n${lines.join('\n')}`);
       });
     }
 
@@ -786,7 +830,7 @@ function dispatchTool(id, name, args, respondFn) {
       return fetchAtlassian('/rest/api/3/project?expand=description', 'GET', null, (err, res) => {
         if (err) return sendError(id, err);
         const lines = res.map(p => `[${p.key}] ${p.name}${p.description ? ` — ${p.description}` : ''}`);
-        sendText(id, `Proyectos (${lines.length}):\n\n${lines.join('\n')}`);
+        sendText(id, `Projects (${lines.length}):\n\n${lines.join('\n')}`);
       });
     }
 
@@ -795,7 +839,7 @@ function dispatchTool(id, name, args, respondFn) {
       return fetchAtlassian(`/rest/agile/1.0/board/${args.boardId}/sprint?state=${state}`, 'GET', null, (err, res) => {
         if (err) return sendError(id, err);
         const sprints = res.values || [];
-        if (!sprints.length) return sendText(id, `No hay sprints con estado "${state}".`);
+        if (!sprints.length) return sendText(id, `No sprints with state "${state}".`);
         const lines = sprints.map(s => `[${s.id}] ${s.name} | ${s.state} | ${s.startDate || '?'} → ${s.endDate || '?'}`);
         sendText(id, lines.join('\n'));
       });
@@ -824,7 +868,7 @@ function dispatchTool(id, name, args, respondFn) {
         );
         if (!transition) {
           const available = (res.transitions || []).map(t => t.name).join(', ');
-          return sendText(id, `Transición "${args.transitionName}" no encontrada. Disponibles: ${available}`);
+          return sendText(id, `Transition "${args.transitionName}" not found. Available: ${available}`);
         }
         fetchAtlassian(transPath, 'POST', { transition: { id: transition.id } }, (err2) => {
           if (err2) return sendError(id, err2);
@@ -862,7 +906,7 @@ function dispatchTool(id, name, args, respondFn) {
           const issues = res.issues || [];
           if (!issues.length) return sendText(id, 'Sprint sin tickets.');
           const lines = issues.map(i =>
-            `[${i.key}] ${i.fields.summary}\n  ${i.fields.status.name} | ${i.fields.assignee?.displayName || 'Sin asignar'}`
+            `[${i.key}] ${i.fields.summary}\n  ${i.fields.status.name} | ${i.fields.assignee?.displayName || 'Unassigned'}`
           );
           sendText(id, `Tickets del sprint (${issues.length}):\n\n${lines.join('\n\n')}`);
         });
@@ -910,7 +954,7 @@ function dispatchTool(id, name, args, respondFn) {
         if (err) return sendError(id, err);
         const transitions = res.transitions || [];
         const lines = transitions.map(t => `[${t.id}] ${t.name} → ${t.to?.name}`);
-        sendText(id, `Transiciones disponibles para ${args.key}:\n\n${lines.join('\n')}`);
+        sendText(id, `Available transitions for ${args.key}:\n\n${lines.join('\n')}`);
       });
     }
 
@@ -939,7 +983,7 @@ function dispatchTool(id, name, args, respondFn) {
       return fetchAtlassian('/rest/api/3/issuetype', 'GET', null, (err, res) => {
         if (err) return sendError(id, err);
         const types = (Array.isArray(res) ? res : []).map(t => `[${t.id}] ${t.name} — ${t.description || ''}`);
-        sendText(id, `Tipos de issue globales (${types.length}):\n\n${types.join('\n')}`);
+        sendText(id, `Issue types globales (${types.length}):\n\n${types.join('\n')}`);
       });
     }
 
@@ -1011,7 +1055,7 @@ function dispatchTool(id, name, args, respondFn) {
           const items = (h.items || []).map(i => `    ${i.field}: "${i.fromString || '-'}" → "${i.toString || '-'}"`).join('\n');
           return `[${h.created?.slice(0, 16)}] ${h.author?.displayName}\n${items}`;
         });
-        sendText(id, `Changelog de ${args.key} (últimos ${histories.length}):\n\n${lines.join('\n\n')}`);
+        sendText(id, `Changelog of ${args.key} (last ${histories.length}):\n\n${lines.join('\n\n')}`);
       });
     }
 
@@ -1022,11 +1066,11 @@ function dispatchTool(id, name, args, respondFn) {
       return fetchAtlassian(`/wiki/rest/api/content/search?${qs}`, 'GET', null, (err, res) => {
         if (err) return sendError(id, err);
         const results = res.results || [];
-        if (!results.length) return sendText(id, 'No se encontraron páginas.');
+        if (!results.length) return sendText(id, 'No pages found.');
         const lines = results.map(p =>
           `[${p.id}] ${p.title}\n  Espacio: ${p.space?.name || p.space?.key} | Tipo: ${p.type} | URL: https://${ATLASSIAN_HOST}/wiki${p._links?.webui || ''}`
         );
-        sendText(id, `${res.totalSize ?? results.length} resultado(s) (mostrando ${results.length}):\n\n${lines.join('\n\n')}`);
+        sendText(id, `${res.totalSize ?? results.length} result(s) (showing ${results.length}):\n\n${lines.join('\n\n')}`);
       });
     }
 
@@ -1040,9 +1084,9 @@ function dispatchTool(id, name, args, respondFn) {
           `[${res.id}] ${res.title}`,
           `Espacio: ${res.space?.name} (${res.space?.key})`,
           ancestors ? `Ruta: ${ancestors} > ${res.title}` : '',
-          `Versión: ${res.version?.number} | Última modificación: ${res.version?.when || '-'}`,
+          `Version: ${res.version?.number} | Last modified: ${res.version?.when || '-'}`,
           `URL: https://${ATLASSIAN_HOST}/wiki${res._links?.webui || ''}`,
-          `\nContenido:\n${bodyText || '(vacío)'}`
+          `\nContenido:\n${bodyText || '(empty)'}`
         ].filter(Boolean).join('\n');
         sendText(id, out);
       });
@@ -1066,11 +1110,11 @@ function dispatchTool(id, name, args, respondFn) {
       return fetchAtlassian(`/wiki/rest/api/space/${encodeURIComponent(args.spaceKey)}/content/page?${qs}`, 'GET', null, (err, res) => {
         if (err) return sendError(id, err);
         const pages = res.results || [];
-        if (!pages.length) return sendText(id, `No hay páginas en el espacio "${args.spaceKey}".`);
+        if (!pages.length) return sendText(id, `No pages in space "${args.spaceKey}".`);
         const lines = pages.map(p =>
           `[${p.id}] ${p.title} (v${p.version?.number})`
         );
-        sendText(id, `Páginas en ${args.spaceKey} (${pages.length}):\n\n${lines.join('\n')}`);
+        sendText(id, `Pages in ${args.spaceKey} (${pages.length}):\n\n${lines.join('\n')}`);
       });
     }
 
@@ -1089,7 +1133,7 @@ function dispatchTool(id, name, args, respondFn) {
       if (args.parentId) body.ancestors = [{ id: args.parentId }];
       return fetchAtlassian('/wiki/rest/api/content', 'POST', body, (err, res) => {
         if (err) return sendError(id, err);
-        sendText(id, `Página creada: [${res.id}] ${res.title}\nURL: https://${ATLASSIAN_HOST}/wiki${res._links?.webui || ''}`);
+        sendText(id, `Page created: [${res.id}] ${res.title}\nURL: https://${ATLASSIAN_HOST}/wiki${res._links?.webui || ''}`);
       });
     }
 
@@ -1111,7 +1155,7 @@ function dispatchTool(id, name, args, respondFn) {
         };
         fetchAtlassian(`/wiki/rest/api/content/${encodeURIComponent(args.pageId)}`, 'PUT', body, (err2, res) => {
           if (err2) return sendError(id, err2);
-          sendText(id, `Página actualizada: [${res.id}] ${res.title} (v${res.version?.number})\nURL: https://${ATLASSIAN_HOST}/wiki${res._links?.webui || ''}`);
+          sendText(id, `Page updated: [${res.id}] ${res.title} (v${res.version?.number})\nURL: https://${ATLASSIAN_HOST}/wiki${res._links?.webui || ''}`);
         });
       });
     }
@@ -1119,7 +1163,7 @@ function dispatchTool(id, name, args, respondFn) {
     case 'confluence_delete_page': {
       return fetchAtlassian(`/wiki/rest/api/content/${encodeURIComponent(args.pageId)}`, 'DELETE', null, (err) => {
         if (err) return sendError(id, err);
-        sendText(id, `Página ${args.pageId} eliminada.`);
+        sendText(id, `Page ${args.pageId} deleted.`);
       });
     }
 
@@ -1128,9 +1172,9 @@ function dispatchTool(id, name, args, respondFn) {
       return fetchAtlassian(`/wiki/rest/api/content/${encodeURIComponent(args.pageId)}/child/page?limit=${limit}&expand=version`, 'GET', null, (err, res) => {
         if (err) return sendError(id, err);
         const pages = res.results || [];
-        if (!pages.length) return sendText(id, 'Esta página no tiene hijos.');
+        if (!pages.length) return sendText(id, 'This page has no children.');
         const lines = pages.map(p => `[${p.id}] ${p.title}`);
-        sendText(id, `Páginas hijas de ${args.pageId} (${lines.length}):\n\n${lines.join('\n')}`);
+        sendText(id, `Child pages of ${args.pageId} (${lines.length}):\n\n${lines.join('\n')}`);
       });
     }
 
@@ -1147,7 +1191,7 @@ function dispatchTool(id, name, args, respondFn) {
       };
       return fetchAtlassian('/wiki/rest/api/content', 'POST', body, (err, res) => {
         if (err) return sendError(id, err);
-        sendText(id, `Comentario agregado a la página ${args.pageId}. ID comentario: ${res.id}`);
+        sendText(id, `Comment added to page ${args.pageId}. ID comentario: ${res.id}`);
       });
     }
 
@@ -1166,14 +1210,14 @@ function dispatchTool(id, name, args, respondFn) {
         if (err) return sendError(id, err);
         const labels = res.results || [];
         if (!labels.length) return sendText(id, 'Sin etiquetas.');
-        sendText(id, `Etiquetas: ${labels.map(l => l.name).join(', ')}`);
+        sendText(id, `Labels: ${labels.map(l => l.name).join(', ')}`);
       });
     }
 
     case 'confluence_add_page_label': {
       return fetchAtlassian(`/wiki/rest/api/content/${encodeURIComponent(args.pageId)}/label`, 'POST', [{ prefix: 'global', name: args.label }], (err) => {
         if (err) return sendError(id, err);
-        sendText(id, `Etiqueta "${args.label}" agregada a la página ${args.pageId}.`);
+        sendText(id, `Label "${args.label}" added to page ${args.pageId}.`);
       });
     }
 
@@ -1189,7 +1233,7 @@ function dispatchTool(id, name, args, respondFn) {
 
     // ── Bitbucket tools ────────────────────────────────────────────────────────
     case 'bitbucket_get_repos': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       let path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}?pagelen=50&sort=-updated_on`;
       if (args.filter) path += `&q=name~"${encodeURIComponent(args.filter)}"`;
       return fetchBitbucket(path, 'GET', null, (err, res) => {
@@ -1197,14 +1241,14 @@ function dispatchTool(id, name, args, respondFn) {
         const repos = res.values || [];
         if (!repos.length) return sendText(id, 'No se encontraron repositorios.');
         const lines = repos.map(r =>
-          `${r.slug} — ${r.description || '(sin descripción)'} | ${r.scm.toUpperCase()} | ${r.is_private ? 'Privado' : 'Público'}`
+          `${r.slug} — ${r.description || '(no description)'} | ${r.scm.toUpperCase()} | ${r.is_private ? 'Private' : 'Public'}`
         );
-        sendText(id, `Repositorios en ${BITBUCKET_WORKSPACE} (${repos.length}):\n\n${lines.join('\n')}`);
+        sendText(id, `Repositories en ${BITBUCKET_WORKSPACE} (${repos.length}):\n\n${lines.join('\n')}`);
       });
     }
 
     case 'bitbucket_get_pull_requests': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const state = args.state || 'OPEN';
       const path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/pullrequests?state=${state}&pagelen=20`;
       return fetchBitbucket(path, 'GET', null, (err, res) => {
@@ -1219,7 +1263,7 @@ function dispatchTool(id, name, args, respondFn) {
     }
 
     case 'bitbucket_get_pull_request': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/pullrequests/${args.prId}`;
       return fetchBitbucket(path, 'GET', null, (err, pr) => {
         if (err) return sendError(id, err);
@@ -1238,7 +1282,7 @@ function dispatchTool(id, name, args, respondFn) {
     }
 
     case 'bitbucket_create_pull_request': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/pullrequests`;
       const body = {
         title: args.title,
@@ -1255,29 +1299,29 @@ function dispatchTool(id, name, args, respondFn) {
     }
 
     case 'bitbucket_add_pr_comment': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/pullrequests/${args.prId}/comments`;
       return fetchBitbucket(path, 'POST', { content: { raw: args.comment } }, (err) => {
         if (err) return sendError(id, err);
-        sendText(id, `Comentario agregado al PR #${args.prId}.`);
+        sendText(id, `Comment added to PR #${args.prId}.`);
       });
     }
 
     case 'bitbucket_get_branches': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       let path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/refs/branches?pagelen=30&sort=-target.date`;
       if (args.filter) path += `&q=name~"${encodeURIComponent(args.filter)}"`;
       return fetchBitbucket(path, 'GET', null, (err, res) => {
         if (err) return sendError(id, err);
         const branches = res.values || [];
         if (!branches.length) return sendText(id, 'No se encontraron ramas.');
-        const lines = branches.map(b => `${b.name} — último commit: ${b.target?.hash?.slice(0, 7) || '?'} (${b.target?.date?.slice(0, 10) || '?'})`);
+        const lines = branches.map(b => `${b.name} — latest commit: ${b.target?.hash?.slice(0, 7) || '?'} (${b.target?.date?.slice(0, 10) || '?'})`);
         sendText(id, `Ramas en ${args.repo} (${branches.length}):\n\n${lines.join('\n')}`);
       });
     }
 
     case 'bitbucket_get_commits': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const limit = args.limit || 20;
       let path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/commits?pagelen=${limit}`;
       if (args.branch) path += `&include=${encodeURIComponent(args.branch)}`;
@@ -1291,7 +1335,7 @@ function dispatchTool(id, name, args, respondFn) {
     }
 
     case 'bitbucket_get_diff': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/pullrequests/${args.prId}/diff`;
       return fetchBitbucket(path, 'GET', null, (err, res) => {
         if (err) return sendError(id, err);
@@ -1302,7 +1346,7 @@ function dispatchTool(id, name, args, respondFn) {
     }
 
     case 'bitbucket_approve_pr': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/pullrequests/${args.prId}/approve`;
       return fetchBitbucket(path, 'POST', {}, (err) => {
         if (err) return sendError(id, err);
@@ -1311,16 +1355,16 @@ function dispatchTool(id, name, args, respondFn) {
     }
 
     case 'bitbucket_unapprove_pr': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/pullrequests/${args.prId}/approve`;
       return fetchBitbucket(path, 'DELETE', null, (err) => {
         if (err) return sendError(id, err);
-        sendText(id, `Aprobación retirada del PR #${args.prId}.`);
+        sendText(id, `PR approval removed #${args.prId}.`);
       });
     }
 
     case 'bitbucket_merge_pr': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/pullrequests/${args.prId}/merge`;
       const body = {
         type: 'pullrequest',
@@ -1334,7 +1378,7 @@ function dispatchTool(id, name, args, respondFn) {
     }
 
     case 'bitbucket_decline_pr': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/pullrequests/${args.prId}/decline`;
       return fetchBitbucket(path, 'POST', {}, (err, pr) => {
         if (err) return sendError(id, err);
@@ -1343,19 +1387,19 @@ function dispatchTool(id, name, args, respondFn) {
     }
 
     case 'bitbucket_get_pr_comments': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/pullrequests/${args.prId}/comments?pagelen=50`;
       return fetchBitbucket(path, 'GET', null, (err, res) => {
         if (err) return sendError(id, err);
         const comments = res.values || [];
         if (!comments.length) return sendText(id, 'Sin comentarios.');
         const lines = comments.map(c => `[${c.id}] ${c.author?.display_name} (${c.created_on?.slice(0,10)}):\n  ${(c.content?.raw || '').slice(0, 200)}`);
-        sendText(id, `Comentarios del PR #${args.prId} (${lines.length}):\n\n${lines.join('\n\n')}`);
+        sendText(id, `PR comments #${args.prId} (${lines.length}):\n\n${lines.join('\n\n')}`);
       });
     }
 
     case 'bitbucket_get_file': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const branch = args.branch ? `?at=${encodeURIComponent(args.branch)}` : '';
       const path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/src/HEAD/${encodeURIComponent(args.path)}${branch}`;
       return fetchBitbucket(path, 'GET', null, (err, res) => {
@@ -1366,7 +1410,7 @@ function dispatchTool(id, name, args, respondFn) {
     }
 
     case 'bitbucket_get_pipelines': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const limit = args.limit || 10;
       const path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/pipelines/?sort=-created_on&pagelen=${limit}`;
       return fetchBitbucket(path, 'GET', null, (err, res) => {
@@ -1376,33 +1420,33 @@ function dispatchTool(id, name, args, respondFn) {
         const lines = pipelines.map(p =>
           `[${p.build_number}] ${p.state?.name}${p.state?.result?.name ? ` / ${p.state.result.name}` : ''} — ${p.created_on?.slice(0, 16)} | rama: ${p.target?.ref_name || '-'}`
         );
-        sendText(id, `Pipelines de ${args.repo} (${lines.length}):\n\n${lines.join('\n')}`);
+        sendText(id, `Pipelines of ${args.repo} (${lines.length}):\n\n${lines.join('\n')}`);
       });
     }
 
     case 'bitbucket_get_pipeline': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const path = `/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}/${encodeURIComponent(args.repo)}/pipelines/${encodeURIComponent(args.pipelineId)}`;
       return fetchBitbucket(path, 'GET', null, (err, p) => {
         if (err) return sendError(id, err);
         const out = [
           `Pipeline #${p.build_number} — ${p.state?.name} / ${p.state?.result?.name || '-'}`,
           `Rama: ${p.target?.ref_name || '-'} | Commit: ${p.target?.commit?.hash?.slice(0,7) || '-'}`,
-          `Inicio: ${p.created_on?.slice(0,16)} | Duración: ${p.duration_in_seconds || '-'}s`
+          `Started: ${p.created_on?.slice(0,16)} | Duration: ${p.duration_in_seconds || '-'}s`
         ].join('\n');
         sendText(id, out);
       });
     }
 
     case 'bitbucket_list_workspace_members': {
-      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Falta la variable BITBUCKET_WORKSPACE en .env');
+      if (!BITBUCKET_WORKSPACE) return sendText(id, 'Missing BITBUCKET_WORKSPACE in .env');
       const path = `/2.0/workspaces/${encodeURIComponent(BITBUCKET_WORKSPACE)}/members?pagelen=50`;
       return fetchBitbucket(path, 'GET', null, (err, res) => {
         if (err) return sendError(id, err);
         const members = res.values || [];
-        if (!members.length) return sendText(id, 'Sin miembros.');
+        if (!members.length) return sendText(id, 'No members.');
         const lines = members.map(m => `${m.user?.display_name} (${m.user?.account_id || '-'})`);
-        sendText(id, `Miembros del workspace ${BITBUCKET_WORKSPACE} (${lines.length}):\n\n${lines.join('\n')}`);
+        sendText(id, `Workspace members ${BITBUCKET_WORKSPACE} (${lines.length}):\n\n${lines.join('\n')}`);
       });
     }
 
@@ -1418,7 +1462,7 @@ function dispatchTool(id, name, args, respondFn) {
     }
 
     default:
-      sendText(id, `Herramienta desconocida: ${name}`);
+      sendText(id, `Unknown tool: ${name}`);
   }
 }
 
@@ -1431,12 +1475,13 @@ function fetchBitbucket(path, method, body, callback) {
   return fetchApi('api.bitbucket.org', path, method, body, auth, callback);
 }
 
-function fetchApi(hostname, path, method, body, authHeader, callback) {
+function fetchApi(hostname, apiPath, method, body, authHeader, callback) {
   const bodyStr = body ? JSON.stringify(body) : null;
   const options = {
     hostname,
-    path,
+    path: apiPath,
     method,
+    timeout: 30000,
     headers: {
       'Authorization': `Basic ${authHeader}`,
       'Accept': 'application/json',
@@ -1457,6 +1502,10 @@ function fetchApi(hostname, path, method, body, authHeader, callback) {
       if (!contentType.includes('application/json')) return callback(null, data);
       try { callback(null, JSON.parse(data)); } catch (e) { callback(null, data); }
     });
+  });
+  req.on('timeout', () => {
+    req.destroy();
+    callback(new Error(`Request to ${hostname}${apiPath} timed out after 30s`));
   });
   req.on('error', callback);
   if (bodyStr) req.write(bodyStr);
