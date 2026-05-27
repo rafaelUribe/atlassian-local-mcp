@@ -6,8 +6,10 @@
   // Chip arrays
   let baseBranches: string[] = [];
   let confluenceSpaces: string[] = [];
+  let bitbucketProjects: string[] = [];
   let branchInput = '';
   let cspaceInput = '';
+  let bprojInput = '';
 
   // Form status
   let status = '';
@@ -32,11 +34,18 @@
     cspaceInput = '';
   }
 
+  function addBProj() {
+    const v = bprojInput.trim().toUpperCase();
+    if (v && !bitbucketProjects.includes(v)) bitbucketProjects = [...bitbucketProjects, v];
+    bprojInput = '';
+  }
+
   async function handleSubmit() {
     const data: Record<string, string> = {
       ...fields,
       BASE_BRANCHES: baseBranches.join(','),
       CONFLUENCE_SPACES: confluenceSpaces.join(','),
+      BITBUCKET_PROJECTS: bitbucketProjects.join(','),
     };
     const result = await saveConfig(data);
     if (result.ok) {
@@ -65,6 +74,8 @@
           baseBranches = v ? v.split(',').map((b: string) => b.trim()).filter(Boolean) : [];
         } else if (k === 'CONFLUENCE_SPACES') {
           confluenceSpaces = v ? v.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+        } else if (k === 'BITBUCKET_PROJECTS') {
+          bitbucketProjects = v ? v.split(',').map((p: string) => p.trim()).filter(Boolean) : [];
         } else if (k in fields) {
           fields[k] = v;
         }
@@ -99,6 +110,26 @@
       <input type="text" bind:value={fields.BITBUCKET_WORKSPACE} placeholder="your-workspace-slug" />
       <small>Found in: bitbucket.org/<strong>{'{this-part}'}</strong></small>
     </label>
+
+    <!-- Bitbucket Projects chips -->
+    <div class="branch-config">
+      <label>Bitbucket Projects <span class="optional">optional</span></label>
+      <small>Filter repos by project key (e.g. <code>DIGCOM</code>, <code>FIRSTCALL</code>). Leave empty to load all workspace repos.</small>
+      <div class="branch-input-row">
+        <input
+          type="text" bind:value={bprojInput} placeholder="e.g. DIGCOM"
+          on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBProj(); } }}
+        />
+        <button type="button" on:click={addBProj}>Add</button>
+      </div>
+      {#if bitbucketProjects.length}
+        <ul class="branch-tags">
+          {#each bitbucketProjects as p, i}
+            <li><span>{p}</span><button type="button" on:click={() => { bitbucketProjects = bitbucketProjects.filter((_, j) => j !== i); }}>&times;</button></li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
 
     <!-- Confluence Spaces chips -->
     <div class="branch-config">
