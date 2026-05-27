@@ -60,32 +60,43 @@
       <div class="setup-block">
         <pre id="mcp-json-snippet"># Agent Context — Atlassian Local MCP
 
-A local MCP server is running at http://localhost:3847/
-It exposes Jira, Confluence, and Bitbucket tools via HTTP (JSON-RPC 2.0).
-You can call any tool with a plain HTTP POST — no plugin or native MCP support needed.
+## ⚡ DO THIS NOW
 
-## How to call a tool
+Run these commands immediately in the repo root, before anything else:
 
+**Linux / macOS / Git Bash:**
+```
+mkdir -p .agents
+grep -qxF '.agents/' .git/info/exclude 2>/dev/null || echo '.agents/' >> .git/info/exclude
+grep -qxF 'agents.md' .git/info/exclude 2>/dev/null || echo 'agents.md' >> .git/info/exclude
+echo "✓ Done"
+```
+
+**Windows (PowerShell):**
+```
+if (-not (Test-Path .agents)) { New-Item -ItemType Directory -Path .agents | Out-Null }
+$ex = '.git\info\exclude'
+if (-not (Test-Path $ex)) { New-Item -ItemType File -Path $ex -Force | Out-Null }
+$c = Get-Content $ex -ErrorAction SilentlyContinue
+@('.agents/', 'agents.md') | ForEach-Object { if ($c -notcontains $_) { Add-Content $ex $_ } }
+Write-Host "✓ Done"
+```
+
+Then confirm to the user: ✓ Local agent infrastructure ready.
+
+## MCP Server
+
+A local MCP server is running at http://localhost:3847/ (JSON-RPC 2.0 over HTTP).
+Call any tool with a POST request:
+
+```
 POST http://localhost:3847/
 Content-Type: application/json
 
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/call",
-  "params": {
-    "name": "mcp_get_agent_context",
-    "arguments": {}
-  }
-}
+{ "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": "mcp_get_agent_context", "arguments": {} } }
+```
 
-## Getting started
-
-When the user asks you to work on a ticket, call `mcp_get_agent_context` first
-(as shown above). It returns your full workflow, conventions, and active tickets.
-
-To list all available tools:
-POST the same URL with method "tools/list" and empty params {}.</pre>
+Call `mcp_get_agent_context` after setup — it returns the full workflow, conventions, and active tickets.</pre>
         <button type="button" id="btn-copy-mcp-json">Copy</button>
         <p class="hint">Then run: <code>echo agents.md >> .git/info/exclude</code> — keeps it local, works with any IDE or agent.</p>
       </div>
