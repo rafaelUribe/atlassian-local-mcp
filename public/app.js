@@ -178,12 +178,46 @@ document.getElementById('branch-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); addBranch(); }
 });
 
+// ── Configuration — Confluence Spaces ───────────────────────────────────────
+let confluenceSpaces = [];
+
+function renderCSpaces() {
+  const list = document.getElementById('cspace-list');
+  list.innerHTML = confluenceSpaces.map((s, i) =>
+    `<li><span>${s}</span><button type="button" data-idx="${i}">&times;</button></li>`
+  ).join('');
+  list.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      confluenceSpaces.splice(Number(btn.dataset.idx), 1);
+      renderCSpaces();
+    });
+  });
+  document.querySelector('[name="CONFLUENCE_SPACES"]').value = confluenceSpaces.join(',');
+}
+
+function addCSpace() {
+  const input = document.getElementById('cspace-input');
+  const val = input.value.trim().toUpperCase();
+  if (val && !confluenceSpaces.includes(val)) {
+    confluenceSpaces.push(val);
+    renderCSpaces();
+  }
+  input.value = '';
+  input.focus();
+}
+
+document.getElementById('btn-add-cspace').addEventListener('click', addCSpace);
+document.getElementById('cspace-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); addCSpace(); }
+});
+
 // ── Configuration — .env ────────────────────────────────────────────────────
 document.getElementById('form-env').addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = e.target;
-  // Ensure BASE_BRANCHES hidden input has the current value
+  // Ensure chip hidden inputs have current values
   form.querySelector('[name="BASE_BRANCHES"]').value = baseBranches.join(',');
+  form.querySelector('[name="CONFLUENCE_SPACES"]').value = confluenceSpaces.join(',');
   const data = Object.fromEntries(new FormData(form));
   try {
     const res = await fetch(`${BASE}/api/config`, {
@@ -515,6 +549,11 @@ async function rpcCall(method, params) {
       if (key === 'BASE_BRANCHES') {
         baseBranches = value ? value.split(',').map(b => b.trim()).filter(Boolean) : [];
         renderBranches();
+        continue;
+      }
+      if (key === 'CONFLUENCE_SPACES') {
+        confluenceSpaces = value ? value.split(',').map(s => s.trim()).filter(Boolean) : [];
+        renderCSpaces();
         continue;
       }
       if (key === 'ACTIVE_TICKETS') {

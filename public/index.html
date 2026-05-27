@@ -132,6 +132,23 @@ Then confirm to the user: ✓ Local agent infrastructure ready. `agents.md` save
             <input type="text" name="BITBUCKET_WORKSPACE" placeholder="your-workspace-slug">
             <small>Found in: bitbucket.org/<strong>{this-part}</strong></small>
           </label>
+
+          <div class="branch-config">
+            <label>Confluence Spaces <span class="optional">optional</span></label>
+            <small>Only these spaces will be indexed/cached. Leave empty to allow all.</small>
+            <div class="branch-input-row">
+              <input type="text" id="cspace-input" placeholder="e.g. B2B">
+              <button type="button" id="btn-add-cspace">Add</button>
+            </div>
+            <ul id="cspace-list" class="branch-tags"></ul>
+            <input type="hidden" name="CONFLUENCE_SPACES">
+          </div>
+
+          <label>Jira Epic <span class="optional">optional</span>
+            <input type="text" name="JIRA_EPIC" placeholder="B2B-123 or project = B2B">
+            <small>Epic key or JQL — cache will only include tickets under this epic/project</small>
+          </label>
+
           <div class="branch-config">
             <label>Base Branches</label>
             <div class="branch-input-row">
