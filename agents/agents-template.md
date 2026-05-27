@@ -18,6 +18,10 @@ grep -qxF '.agents/' .git/info/exclude 2>/dev/null || echo '.agents/' >> .git/in
 grep -qxF 'agents.md' .git/info/exclude 2>/dev/null || echo 'agents.md' >> .git/info/exclude
 grep -qxF '.env' .git/info/exclude 2>/dev/null || echo '.env' >> .git/info/exclude
 grep -qxF 'mcp.info' .git/info/exclude 2>/dev/null || echo 'mcp.info' >> .git/info/exclude
+curl -s -X POST http://localhost:3847/ \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"mcp_get_agent_context","arguments":{}}}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['content'][0]['text'])" > agents.md
 echo "✓ Self-setup complete"
 ```
 
@@ -30,14 +34,13 @@ $content = Get-Content $exclude -ErrorAction SilentlyContinue
 @('.agents/', 'agents.md', '.env', 'mcp.info') | ForEach-Object {
   if ($content -notcontains $_) { Add-Content $exclude $_ }
 }
-Write-Host "✓ Self-setup complete"
+$r = Invoke-RestMethod http://localhost:3847/ -Method Post -ContentType "application/json" -Body '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"mcp_get_agent_context","arguments":{}}}'
+$r.result.content[0].text | Set-Content agents.md -Encoding UTF8
+Write-Host "✓ Self-setup complete — agents.md saved"
 ```
 
-After running, **write this entire response to `agents.md`** in the repo root (create or overwrite).
-This saves the full workflow locally so future sessions don't need to re-fetch.
-
 Then confirm to the user:
-> ✓ Local agent infrastructure ready. `.agents/` created, `agents.md` saved, both git-excluded.
+> ✓ Local agent infrastructure ready. `.agents/` created, `agents.md` saved with full workflow, both git-excluded.
 
 ---
 
