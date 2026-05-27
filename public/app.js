@@ -32,8 +32,21 @@ async function refreshDashboard() {
     document.querySelector('.status-dot').classList.add('error');
     document.getElementById('status-text').textContent = 'Disconnected';
   }
-  document.getElementById('dash-last-check').textContent = new Date().toLocaleTimeString();
+  lastCheckTime = Date.now();
+  updateLastCheckCounter();
 }
+
+let lastCheckTime = Date.now();
+function updateLastCheckCounter() {
+  const elapsed = Math.floor((Date.now() - lastCheckTime) / 1000);
+  const el = document.getElementById('dash-last-check');
+  if (elapsed < 1) {
+    el.textContent = 'just now';
+  } else {
+    el.textContent = `${elapsed}s ago`;
+  }
+}
+setInterval(updateLastCheckCounter, 1000);
 
 function formatUptime(seconds) {
   if (seconds < 60) return `${seconds}s`;
