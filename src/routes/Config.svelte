@@ -240,22 +240,19 @@
   {#if activeTab === 'confluence'}
   <div class="config-section">
     <h2>Confluence Settings</h2>
-    <div class="branch-config">
-      <label>Space Keys filter <span class="optional">optional</span></label>
-      <small>Only these spaces will be indexed. Leave empty to allow all global spaces.</small>
-      <div class="branch-input-row">
-        <input type="text" bind:value={cspaceInput} placeholder="e.g. B2B"
-          on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confluenceSpaces = addChip(confluenceSpaces, cspaceInput, true); cspaceInput = ''; } }} />
-        <button type="button" on:click={() => { confluenceSpaces = addChip(confluenceSpaces, cspaceInput, true); cspaceInput = ''; }}>Add</button>
-      </div>
-      {#if confluenceSpaces.length}
+
+    {#if confluenceSpaces.length}
+      <div class="branch-config">
+        <label>Space Keys filter</label>
         <ul class="branch-tags">
           {#each confluenceSpaces as s, i}
             <li><span>{s}</span><button type="button" on:click={() => { confluenceSpaces = confluenceSpaces.filter((_, j) => j !== i); }}>&times;</button></li>
           {/each}
         </ul>
-      {/if}
-    </div>
+      </div>
+    {:else}
+      <p class="hint">No spaces filtered — all global spaces will be indexed. Load the list below and click <strong>+</strong> to add.</p>
+    {/if}
 
     <div class="debug-section">
       <div class="debug-header">
