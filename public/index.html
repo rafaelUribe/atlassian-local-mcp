@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlassian Local MCP</title>
+  <link rel="stylesheet" href="/ui/style.css">
+</head>
+<body>
+  <nav>
+    <div class="nav-brand">⚡ Atlassian MCP</div>
+    <div class="nav-links">
+      <a href="#" data-tab="dashboard" class="active">Dashboard</a>
+      <a href="#" data-tab="config">Configuration</a>
+      <a href="#" data-tab="tools">Tools</a>
+      <a href="#" data-tab="ai">AI Assistant</a>
+    </div>
+    <div class="nav-status">
+      <span class="status-dot"></span>
+      <span id="status-text">Connected</span>
+    </div>
+  </nav>
+
+  <main>
+    <!-- Dashboard -->
+    <section id="tab-dashboard" class="tab-content active">
+      <h1>Dashboard</h1>
+      <div class="cards">
+        <div class="card">
+          <h3>Server</h3>
+          <p id="dash-url">—</p>
+          <small>Endpoint URL</small>
+        </div>
+        <div class="card">
+          <h3>Tools</h3>
+          <p id="dash-tools">—</p>
+          <small>Available</small>
+        </div>
+        <div class="card">
+          <h3>Uptime</h3>
+          <p id="dash-uptime">—</p>
+          <small>seconds</small>
+        </div>
+        <div class="card">
+          <h3>AI Model</h3>
+          <p id="dash-ai">Checking…</p>
+          <small>Browser built-in</small>
+        </div>
+      </div>
+
+      <h2>Quick Test</h2>
+      <div class="quick-test">
+        <button id="btn-health">Check Health</button>
+        <button id="btn-list-tools">List Tools</button>
+        <pre id="quick-output"></pre>
+      </div>
+    </section>
+
+    <!-- Configuration -->
+    <section id="tab-config" class="tab-content">
+      <h1>Configuration</h1>
+
+      <div class="config-section">
+        <h2>Server Credentials (.env)</h2>
+        <p class="hint">These are stored only in this MCP repo's <code>.env</code> file. Never committed.</p>
+        <form id="form-env">
+          <label>JIRA_HOST <span class="required">*</span>
+            <input type="text" name="JIRA_HOST" placeholder="your-company.atlassian.net">
+          </label>
+          <label>JIRA_EMAIL <span class="required">*</span>
+            <input type="email" name="JIRA_EMAIL" placeholder="you@company.com">
+          </label>
+          <label>JIRA_TOKEN <span class="required">*</span>
+            <input type="password" name="JIRA_TOKEN" placeholder="Your API token">
+            <small><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank">Generate token ↗</a></small>
+          </label>
+          <label>BITBUCKET_WORKSPACE <span class="optional">optional</span>
+            <input type="text" name="BITBUCKET_WORKSPACE" placeholder="your-workspace-slug">
+            <small>Found in: bitbucket.org/<strong>{this-part}</strong></small>
+          </label>
+          <label>HTTP_PORT
+            <input type="number" name="HTTP_PORT" placeholder="3847" value="3847">
+          </label>
+          <div class="form-actions">
+            <button type="submit">Save .env</button>
+            <span id="env-status"></span>
+          </div>
+        </form>
+      </div>
+
+      <div class="config-section">
+        <h2>Per-Project Settings (.agents/config.json)</h2>
+        <p class="hint">These are stored in your working repo's <code>.agents/config.json</code>. Excluded from git.</p>
+        <form id="form-project">
+          <label>Base Branches (comma-separated)
+            <input type="text" name="baseBranches" placeholder="develop, test" value="develop, test">
+          </label>
+          <label>Branch Prefix
+            <input type="text" name="branchPrefix" placeholder="task/" value="task/">
+          </label>
+          <div class="form-actions">
+            <button type="button" id="btn-copy-config">Copy config.json to clipboard</button>
+            <span id="config-status"></span>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- Tools -->
+    <section id="tab-tools" class="tab-content">
+      <h1>Tools Explorer</h1>
+      <div class="tools-layout">
+        <div class="tools-sidebar">
+          <input type="text" id="tools-search" placeholder="Search tools…">
+          <div class="tools-filters">
+            <button class="filter active" data-filter="all">All</button>
+            <button class="filter" data-filter="jira">Jira</button>
+            <button class="filter" data-filter="confluence">Confluence</button>
+            <button class="filter" data-filter="bitbucket">Bitbucket</button>
+          </div>
+          <ul id="tools-list"></ul>
+        </div>
+        <div class="tools-detail">
+          <div id="tool-detail-placeholder">
+            <p>← Select a tool to see details and try it</p>
+          </div>
+          <div id="tool-detail" class="hidden">
+            <h2 id="tool-name"></h2>
+            <p id="tool-desc"></p>
+            <h3>Parameters</h3>
+            <form id="tool-params"></form>
+            <button id="btn-execute-tool">Execute</button>
+            <h3>Response</h3>
+            <pre id="tool-response"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- AI Assistant -->
+    <section id="tab-ai" class="tab-content">
+      <h1>AI Assistant</h1>
+      <div id="ai-unavailable" class="hidden">
+        <div class="warning-box">
+          <h3>⚠️ Built-in AI not available</h3>
+          <p>This feature requires Chrome 127+ or Edge with the built-in AI model (Gemini Nano).</p>
+          <p>Enable it at: <code>chrome://flags/#optimization-guide-on-device-model</code></p>
+          <p>Then: <code>chrome://flags/#prompt-api-for-gemini-nano</code> → Enabled</p>
+        </div>
+      </div>
+      <div id="ai-available">
+        <div class="ai-modes">
+          <button class="ai-mode active" data-mode="jql">JQL Generator</button>
+          <button class="ai-mode" data-mode="cql">CQL Generator</button>
+          <button class="ai-mode" data-mode="summarize">Summarize</button>
+          <button class="ai-mode" data-mode="chat">Chat</button>
+        </div>
+        <div class="ai-chat">
+          <div id="ai-messages"></div>
+          <div class="ai-input">
+            <textarea id="ai-prompt" placeholder="Describe what you want to search for…" rows="3"></textarea>
+            <button id="btn-ai-send">Send</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/ui/app.js"></script>
+</body>
+</html>

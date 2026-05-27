@@ -666,6 +666,57 @@ function stdioRespond(id, result) {
   process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
 }
 
+// ── Static file server for the UI ──────────────────────────────────────────────
+const MIME_TYPES = {
+  '.html': 'text/html',
+  '.css': 'text/css',
+  '.js': 'application/javascript',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon'
+};
+
+function serveStatic(pathname, res) {
+  // /ui/ → serve from public/
+  if (pathname === '/ui' || pathname === '/ui/') pathname = '/ui/index.html';
+  if (!pathname.startsWith('/ui/')) {
+    // Root path redirect to /ui/
+    if (pathname === '/' || pathname === '') {
+      res.writeHead(302, { Location: '/ui/' });
+      return res.end();
+    }
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    return res.end('Not Found');
+  }
+
+  // Strip /ui/ prefix to get the file path within public/
+  const relativePath = pathname.slice(4); // remove '/ui/'
+  const safePath = path.normalize(relativePath).replace(/^(\.\.[/\\])+/, '');
+  const filePath = path.join(__dirname, 'public', safePath);
+
+  // Prevent directory traversal
+  if (!filePath.startsWith(path.join(__dirname, 'public'))) {
+    res.writeHead(403);
+    return res.end('Forbidden');
+  }
+
+  try {
+    const stat = fs.statSync(filePath);
+    if (stat.isDirectory()) {
+      return serveStatic(pathname + '/index.html', res);
+    }
+    const ext = path.extname(filePath).toLowerCase();
+    const mime = MIME_TYPES[ext] || 'application/octet-stream';
+    const content = fs.readFileSync(filePath);
+    res.writeHead(200, { 'Content-Type': mime });
+    res.end(content);
+  } catch {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not Found');
+  }
+}
+
 function startHttpServer(port, bindHost) {
   const http = require('http');
   const server = http.createServer((req, res) => {
@@ -675,19 +726,91 @@ function startHttpServer(port, bindHost) {
 
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
 
-    // Health check — GET /health or GET /
+    // ── GET routes ──────────────────────────────────────────────────────────
     if (req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({
-        status: 'ok',
-        server: 'atlassian-local-mcp',
-        tools: TOOLS.length,
-        uptime: Math.floor(process.uptime())
-      }));
+      const url = new URL(req.url, `http://${req.headers.host}`);
+
+      // Health check
+      if (url.pathname === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          status: 'ok',
+          server: 'atlassian-local-mcp',
+          tools: TOOLS.length,
+          uptime: Math.floor(process.uptime())
+        }));
+      }
+
+      // Config API — read .env values (token masked)
+      if (url.pathname === '/api/config') {
+        try {
+          const envContent = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
+          const config = {};
+          for (const line of envContent.split('\n')) {
+            const match = line.match(/^([A-Z_]+)=(.*)$/);
+            if (match) {
+              const [, key, val] = match;
+              config[key] = key.includes('TOKEN') ? (val && val !== 'your_atlassian_api_token' ? '••••••••' : '') : val;
+            }
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify(config));
+        } catch {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({}));
+        }
+      }
+
+      // Serve UI static files
+      return serveStatic(url.pathname, res);
     }
 
+    // ── POST routes ─────────────────────────────────────────────────────────
     if (req.method !== 'POST') { res.writeHead(405); return res.end('Method Not Allowed'); }
 
+    const url = new URL(req.url, `http://${req.headers.host}`);
+
+    // Config API — save .env
+    if (url.pathname === '/api/config') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          // Sanitize: only allow known keys
+          const allowed = ['JIRA_HOST', 'JIRA_EMAIL', 'JIRA_TOKEN', 'BITBUCKET_WORKSPACE', 'HTTP_PORT', 'HTTP_BIND'];
+          const lines = [
+            '# Atlassian MCP — local credentials',
+            '# NEVER commit this file.',
+            ''
+          ];
+          // Read existing token if masked
+          let existingToken = '';
+          try {
+            const existing = fs.readFileSync(path.join(__dirname, '.env'), 'utf8');
+            const m = existing.match(/^JIRA_TOKEN=(.+)$/m);
+            if (m) existingToken = m[1];
+          } catch {}
+
+          for (const key of allowed) {
+            let val = (data[key] || '').trim();
+            if (key === 'JIRA_TOKEN' && (val === '••••••••' || val === '')) {
+              val = existingToken; // preserve existing token if masked/empty
+            }
+            if (val) lines.push(`${key}=${val}`);
+          }
+          fs.writeFileSync(path.join(__dirname, '.env'), lines.join('\n') + '\n', 'utf8');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+        } catch (err) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: err.message }));
+        }
+      });
+      return;
+    }
+
+    // JSON-RPC
     let body = '';
     let size = 0;
     req.on('data', chunk => {
@@ -729,7 +852,7 @@ function startHttpServer(port, bindHost) {
     const displayedHost = bindHost === '0.0.0.0' ? 'localhost' : bindHost;
     const url = `http://${displayedHost}:${port}/`;
     process.stderr.write(`Atlassian MCP HTTP server listening on ${url}\n`);
-    process.stderr.write(`Tools: ${TOOLS.length} | Health: GET ${url}\n`);
+    process.stderr.write(`Tools: ${TOOLS.length} | UI: ${url}ui/\n`);
 
     // write minimal info file so other agents can discover the MCP URL (no secrets)
     const info = { url, host: bindHost, port: Number(port), pid: process.pid, startedAt: new Date().toISOString() };
@@ -738,6 +861,16 @@ function startHttpServer(port, bindHost) {
       process.stderr.write(`MCP info written to ${infoPath}\n`);
     } catch (e) {
       process.stderr.write(`Failed writing MCP info: ${e.message}\n`);
+    }
+
+    // Auto-open browser (unless --no-open flag is passed)
+    if (!process.argv.includes('--no-open')) {
+      const uiUrl = `${url}ui/`;
+      const { exec } = require('child_process');
+      const cmd = process.platform === 'win32' ? `start "" "${uiUrl}"`
+        : process.platform === 'darwin' ? `open "${uiUrl}"`
+        : `xdg-open "${uiUrl}"`;
+      exec(cmd, () => {}); // ignore errors (e.g. no display)
     }
   });
 }
