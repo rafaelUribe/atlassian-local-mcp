@@ -1,7 +1,7 @@
 # atlassian-local-mcp
 
-Local MCP server that exposes **52 tools** for Jira, Confluence, Bitbucket and agent context as a JSON-RPC 2.0 HTTP endpoint.
-Designed to be consumed by AI agents (GitHub Copilot, Cursor, etc.) running inside any repo on your machine.
+Local MCP server exposing **52 tools** for Jira, Confluence, Bitbucket and agent context as a JSON-RPC 2.0 HTTP endpoint.  
+Designed for AI coding agents (GitHub Copilot, Cursor, Windsurf, etc.) to consume from any repository on a developer's machine.
 
 ---
 
@@ -15,13 +15,13 @@ cp .env.example .env   # fill in your credentials
 npm start
 ```
 
-The server starts on `http://localhost:3847/` and writes `mcp.info` so other scripts can discover the URL.
+The server starts on `http://localhost:3847/` and writes a `mcp.info` file for programmatic URL discovery.
 
 ---
 
-## How agents get context (no local files needed)
+## How agents get context
 
-The server exposes a tool called **`mcp_get_agent_context`**. Any AI agent can call it at session start to load the full workflow instructions (Confluence docs workflow, ticket initialization, progress logging, git conventions).
+The server includes a tool called **`mcp_get_agent_context`**. An AI agent calls it at session start to receive the full set of workflow instructions (Confluence docs workflow, ticket initialization, progress logging, git conventions) — no files need to be copied into the target repo.
 
 ```bash
 curl -s -X POST http://localhost:3847/ \
@@ -30,11 +30,15 @@ curl -s -X POST http://localhost:3847/ \
   | jq -r '.result.content[0].text'
 ```
 
-This means your teammates don't need to copy files into their repos. They just need:
-1. The MCP server running locally.
-2. Their AI agent configured to call `http://localhost:3847/`.
+**Setup for each developer:**
+1. Clone this repo and run `npm install`.
+2. Fill in `.env` with personal Atlassian credentials.
+3. Start the server (`npm start`).
+4. Point the AI agent to `http://localhost:3847/` (or read the URL from `mcp.info`).
 
-If you prefer a static file, you can still manually copy [`agents/agents-template.md`](agents/agents-template.md) into your repo.
+No scripts modify the system PATH, environment variables, or other repositories. Each developer's repos remain untouched.
+
+Optionally, the static template can be copied manually: [`agents/agents-template.md`](agents/agents-template.md).
 
 ---
 
@@ -47,7 +51,7 @@ If you prefer a static file, you can still manually copy [`agents/agents-templat
 | Bitbucket | 17 | `bitbucket_get_pull_requests`, `bitbucket_create_pull_request`, `bitbucket_get_diff`, `bitbucket_get_file` |
 | Meta | 1 | `mcp_get_agent_context` |
 
-To list all tools at runtime:
+List all tools at runtime:
 
 ```powershell
 $r = Invoke-RestMethod http://localhost:3847/ -Method Post -ContentType application/json `
@@ -65,14 +69,14 @@ curl -s -X POST http://localhost:3847/ \
 
 ## Agent context workflow
 
-The `mcp_get_agent_context` tool returns the content of [`agents/agents-template.md`](agents/agents-template.md).
+`mcp_get_agent_context` returns the content of [`agents/agents-template.md`](agents/agents-template.md).
 
-Key conventions enforced:
+Conventions enforced by the template:
 
-1. **Cache-first ticket init** — reads `.agents/[TICKET_ID].md` before calling Jira.
-2. **Clean Confluence docs** — search → read 2 pages → propose → confirm → create.
+1. **Cache-first ticket init** — checks `.agents/[TICKET_ID].md` locally before calling Jira.
+2. **Clean Confluence docs** — search → read top pages → propose structure → wait for confirmation → create.
 3. **Progress logging** — `git diff`-based devlog appended to `.agents/[TICKET_ID].md`.
-4. **Git exclude** — `agents.md`, `.env` and `mcp.info` are never committed.
+4. **Git exclude** — `.agents/`, `.env` and `mcp.info` should be added to `.git/info/exclude` in each repo (local-only, never committed).
 
 ---
 
@@ -82,12 +86,12 @@ Key conventions enforced:
 node confluence-doc.js --topic "My Topic" --space "ENG" [--parentId 12345]
 ```
 
-Automates: CQL search → read top pages → print proposal → wait for confirmation → create.
+Automates the search → read → propose → confirm → create flow in a single CLI command.
 
 ---
 
 ## Requirements
 
 - Node.js >= 18
-- Atlassian account with API token ([generate here](https://id.atlassian.com/manage-profile/security/api-tokens))
+- Atlassian API token per developer ([generate here](https://id.atlassian.com/manage-profile/security/api-tokens))
 - Bitbucket App Password or API token with read/write scopes
