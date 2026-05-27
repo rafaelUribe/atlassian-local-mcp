@@ -93,5 +93,47 @@ Automates the search → read → propose → confirm → create flow in a singl
 ## Requirements
 
 - Node.js >= 18
-- Atlassian API token per developer ([generate here](https://id.atlassian.com/manage-profile/security/api-tokens))
-- Bitbucket App Password or API token with read/write scopes
+
+---
+
+## Credentials setup
+
+Each developer needs a personal Atlassian API token. One-time setup:
+
+### 1. Generate your API token
+
+1. Open: **https://id.atlassian.com/manage-profile/security/api-tokens**
+2. Click **"Create API token"** → give it a name (e.g. `mcp-local`) → **Create**.
+3. Copy the token immediately (it won't be shown again).
+
+### 2. Fill in `.env`
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```env
+JIRA_HOST=<your-domain>.atlassian.net
+JIRA_EMAIL=your.name@company.com
+JIRA_TOKEN=<paste your API token here>
+BITBUCKET_WORKSPACE=<your-bitbucket-workspace-slug>
+HTTP_PORT=3847
+HTTP_BIND=0.0.0.0
+```
+
+| Variable | Where to find it |
+|---|---|
+| `JIRA_HOST` | Your Atlassian URL without `https://` — e.g. `acme.atlassian.net` |
+| `JIRA_EMAIL` | The email you log into Atlassian with |
+| `JIRA_TOKEN` | The API token from step 1 |
+| `BITBUCKET_WORKSPACE` | The slug in your Bitbucket URL: `bitbucket.org/<this-part>` |
+
+### 3. Start
+
+```bash
+npm start
+```
+
+If you see `Atlassian MCP HTTP server listening on http://localhost:3847/` — you're done.
