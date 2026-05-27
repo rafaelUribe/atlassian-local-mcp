@@ -192,7 +192,7 @@ document.querySelectorAll('.tools-filters .filter').forEach(btn => {
   });
 });
 
-// ── AI Assistant (Chrome/Edge built-in model) ───────────────────────────────
+// ── AI Assistant (LanguageModel API — Chrome/Edge built-in) ─────────────────
 const aiTab = document.querySelector('[data-tab="ai"]');
 
 async function initAI() {
@@ -202,20 +202,15 @@ async function initAI() {
   const statusEl = document.getElementById('ai-status-detail');
 
   try {
-    // Check for LanguageModel API (newer global) or window.ai (legacy)
-    const lm = (typeof LanguageModel !== 'undefined') ? LanguageModel
-      : window.ai?.languageModel;
-
-    if (!lm) {
-      throw new Error('LanguageModel API not found. Enable the required browser flags.');
+    // Strictly use the LanguageModel global — legacy window.ai is deprecated
+    if (typeof LanguageModel === 'undefined') {
+      throw new Error('LanguageModel API not found. The browser flags are not enabled or the browser version is unsupported.');
     }
 
     // Check availability state
-    const availability = typeof lm.availability === 'function'
-      ? await lm.availability()
-      : (await lm.capabilities?.())?.available;
+    const availability = await LanguageModel.availability();
 
-    if (availability === 'available' || availability === 'readily') {
+    if (availability === 'available') {
       // Model is ready
       unavailableEl.classList.add('hidden');
       availableEl.classList.remove('hidden');
@@ -228,27 +223,27 @@ async function initAI() {
     }
 
     if (availability === 'downloading') {
-      // Model is being downloaded right now
+      // Model weights are being downloaded right now
       dashAi.textContent = 'Downloading…';
       dashAi.style.color = 'var(--warning)';
       if (statusEl) statusEl.textContent = 'The browser is currently downloading the local AI model (Phi-mini/Gemini Nano). Please wait a few minutes and refresh this page.';
       throw new Error('downloading');
     }
 
-    if (availability === 'downloadable' || availability === 'after-download') {
-      // Model can be downloaded — trigger silent initialization to start it
+    if (availability === 'downloadable') {
+      // API present but ~3-4 GB model weights are missing.
+      // Trigger silent download by invoking create() — this wakes up the download engine.
       dashAi.textContent = 'Triggering download…';
       dashAi.style.color = 'var(--warning)';
       try {
-        const createFn = lm.create || lm.create?.bind(lm);
-        if (createFn) await createFn({ expectedInputLanguages: ['en'] });
-      } catch (e) { /* expected to fail during download */ }
-      if (statusEl) statusEl.textContent = 'Download requested. Monitor chrome://components or edge://components for progress. Refresh this page when complete.';
+        await LanguageModel.create({ expectedInputLanguages: ['es'], outputLanguage: 'es' });
+      } catch (e) { /* expected to fail while downloading */ }
+      if (statusEl) statusEl.textContent = 'Download requested. Monitor chrome://components or edge://components → "Optimization Guide On Device Model". Refresh this page when complete.';
       throw new Error('downloadable');
     }
 
-    // 'no' or unknown state
-    throw new Error('Model not available in this browser.');
+    // Unknown state
+    throw new Error(`Unexpected availability state: "${availability}"`);
   } catch (err) {
     unavailableEl.classList.remove('hidden');
     availableEl.classList.add('hidden');
@@ -271,11 +266,12 @@ document.querySelectorAll('.ai-mode').forEach(btn => {
   });
 });
 
-// Helper: resolve the LanguageModel API regardless of browser implementation
-function getLanguageModel() {
-  if (typeof LanguageModel !== 'undefined') return LanguageModel;
-  if (window.ai?.languageModel) return window.ai.languageModel;
-  throw new Error('LanguageModel API not available. See the AI Assistant tab for setup instructions.');
+// Helper: validate LanguageModel is accessible (no legacy fallbacks)
+function assertLanguageModel() {
+  if (typeof LanguageModel === 'undefined') {
+    throw new Error('LanguageModel API not available. See the AI Assistant tab for setup instructions.');
+  }
+  return LanguageModel;
 }
 
 function updateAiPlaceholder() {
@@ -303,6 +299,8 @@ async function sendAiMessage() {
 
   try {
     if (!aiSession) {
+      assertLanguageModel();
+
       const systemPrompts = {
         jql: 'You are a JQL (Jira Query Language) expert. Convert the user\'s natural language description into a valid JQL query. Return ONLY the JQL query, no explanation. Examples: "open bugs in ACME" → project = ACME AND type = Bug AND status != Done. "my tasks this sprint" → assignee = currentUser() AND sprint in openSprints().',
         cql: 'You are a CQL (Confluence Query Language) expert. Convert the user\'s natural language description into a valid CQL query. Return ONLY the CQL query, no explanation. Examples: "deployment docs in ENG space" → type = page AND space = ENG AND text ~ "deployment". "recently modified API docs" → type = page AND text ~ "API" ORDER BY lastmodified DESC.',
@@ -310,13 +308,29 @@ async function sendAiMessage() {
         chat: 'You are a helpful assistant for a software development team using Atlassian tools (Jira, Confluence, Bitbucket). Help with workflow questions, JQL/CQL queries, git branching strategies, and general development practices. Be concise.'
       };
 
-      aiSession = await getLanguageModel().create({
-        systemPrompt: systemPrompts[currentAiMode]
+      // Always pass explicit language config to avoid safety filter blocking
+      // in non-English contexts (Gemini Nano / Phi-mini silently fail otherwise)
+      aiSession = await LanguageModel.create({
+        systemPrompt: systemPrompts[currentAiMode],
+        expectedInputLanguages: ['es', 'en'],
+        outputLanguage: 'en'
       });
     }
 
-    const response = await aiSession.prompt(text);
-    addAiMessage('assistant', response);
+    // Use promptStreaming for resilient output.
+    // CRITICAL: stream returns RAW DELTAS (token fragments), NOT cumulative text.
+    // Must concatenate with += (never overwrite with =).
+    const stream = await aiSession.promptStreaming(text);
+    let accumulated = '';
+    const msgEl = addAiMessage('assistant', '▍'); // placeholder with cursor
+
+    for await (const chunk of stream) {
+      accumulated += chunk; // delta concatenation — do NOT trim or overwrite
+      updateAiMessage(msgEl, accumulated + '▍');
+    }
+
+    // Final render without cursor
+    updateAiMessage(msgEl, accumulated || '(empty response)');
   } catch (err) {
     addAiMessage('assistant', `Error: ${err.message}. Make sure the built-in AI model is enabled in your browser.`);
   }
@@ -326,7 +340,19 @@ function addAiMessage(role, text) {
   const container = document.getElementById('ai-messages');
   const div = document.createElement('div');
   div.className = `ai-msg ${role}`;
+  renderAiContent(div, text, role);
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div; // return element for streaming updates
+}
 
+function updateAiMessage(el, text) {
+  renderAiContent(el, text, 'assistant');
+  const container = document.getElementById('ai-messages');
+  container.scrollTop = container.scrollHeight;
+}
+
+function renderAiContent(el, text, role) {
   // Simple markdown-ish formatting for code blocks
   if (text.includes('```')) {
     const parts = text.split(/```(\w*)\n?/);
@@ -335,14 +361,13 @@ function addAiMessage(role, text) {
       if (i % 2 === 0) html += escapeHtml(parts[i]);
       else { html += `<pre>${escapeHtml(parts[i + 1] || '')}</pre>`; i++; }
     }
-    div.innerHTML = html;
+    el.innerHTML = html;
   } else if (role === 'assistant' && !text.startsWith('Error')) {
-    div.innerHTML = `<pre>${escapeHtml(text)}</pre>`;
+    el.innerHTML = `<pre>${escapeHtml(text)}</pre>`;
   } else {
-    div.textContent = text;
+    el.textContent = text;
   }
-
-  container.appendChild(div);
+}
   container.scrollTop = container.scrollHeight;
 }
 

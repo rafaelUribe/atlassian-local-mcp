@@ -363,9 +363,20 @@ await LanguageModel.availability();
 |---|---|
 | `'available'` | Model is ready — the AI tab in the MCP UI will work |
 | `'downloading'` | Model is currently downloading — wait a few minutes |
-| `'downloadable'` | Model can be downloaded — the MCP UI will trigger it automatically |
+| `'downloadable'` | Model weights (~3-4 GB) are missing — the MCP UI will trigger the download automatically |
 | `ReferenceError` | API not enabled — revisit the flags configuration above |
 
 > **Important:** The LanguageModel API only works on **secure origins** (HTTPS or `localhost`). Since the MCP UI runs on `http://localhost:3847/ui/`, it qualifies automatically.
+
+---
+
+### Technical Details (for developers)
+
+The MCP UI implementation follows these verified behaviors from the latest Chromium API:
+
+- **API namespace:** Strictly `LanguageModel` global constructor. Legacy namespaces (`window.ai`, `ai.languageModel`) are deprecated and not targeted.
+- **Download trigger:** When `availability()` returns `'downloadable'`, the UI calls `LanguageModel.create()` inside a try/catch to wake up the browser's download engine. The model then downloads via the components system.
+- **Streaming (deltas):** `session.promptStreaming(prompt)` returns **raw delta tokens** (sub-word fragments), not cumulative text. The UI concatenates them with `+=` to build the full response progressively.
+- **Localization:** Sessions are created with explicit `expectedInputLanguages` and `outputLanguage` parameters to prevent safety filter blocking in non-English contexts (both Gemini Nano and Phi-mini silently fail otherwise, returning empty streams).
 
 > **Note:** If you don't enable this, the AI tab shows setup instructions instead of hiding — all other features (dashboard, config, tools explorer) work normally.
