@@ -69,15 +69,8 @@
     };
     const result = await saveConfig(data);
     if (result.ok) {
-      status = '✓ Saved! Server restarting…';
+      status = '\u2713 Config saved';
       statusOk = true;
-      setTimeout(async () => {
-        for (let i = 0; i < 10; i++) {
-          try { await fetch('/health'); window.location.reload(); return; } catch {}
-          await new Promise(r => setTimeout(r, 500));
-        }
-        status = '✓ Saved. Refresh manually if needed.';
-      }, 1000);
     } else {
       status = `✗ ${result.error}`;
       statusOk = false;
@@ -270,7 +263,7 @@
   {/if}
 
   <div class="form-actions">
-    <button type="submit">Save .env</button>
+    <button type="submit">Save config</button>
     {#if status}
       <span style="font-size:0.85rem; color: {statusOk ? 'var(--success)' : 'var(--danger)'}">{status}</span>
     {/if}

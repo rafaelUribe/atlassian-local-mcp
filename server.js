@@ -1,5 +1,7 @@
 ﻿require('dotenv').config({ path: require('path').join(__dirname, '.env') });
-require('./lib/config'); // validates required env vars, exits if missing
+const cfg = require('./lib/config');
+const { getDbConfig } = require('./lib/cache');
+cfg.applyDbConfig(getDbConfig()); // overlay DB-stored config on top of .env
 
 const { startHttpServer, handleRequest } = require('./lib/http-server');
 const { dispatchTool }                   = require('./lib/dispatch');
