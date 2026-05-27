@@ -144,21 +144,6 @@
       <input type="text" bind:value={fields.JIRA_EPIC} placeholder="B2B-123 or project = B2B" />
       <small>Epic key or JQL — cache only indexes tickets under this scope</small>
     </label>
-    <div class="branch-config">
-      <label>Base Branches</label>
-      <div class="branch-input-row">
-        <input type="text" bind:value={branchInput} placeholder="e.g. develop"
-          on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); baseBranches = addChip(baseBranches, branchInput); branchInput = ''; } }} />
-        <button type="button" on:click={() => { baseBranches = addChip(baseBranches, branchInput); branchInput = ''; }}>Add</button>
-      </div>
-      {#if baseBranches.length}
-        <ul class="branch-tags">
-          {#each baseBranches as b, i}
-            <li><span>{b}</span><button type="button" on:click={() => { baseBranches = baseBranches.filter((_, j) => j !== i); }}>&times;</button></li>
-          {/each}
-        </ul>
-      {/if}
-    </div>
     <label>Branch Prefix
       <input type="text" bind:value={fields.BRANCH_PREFIX} placeholder="task/" />
       <small>Prefix for feature branches (e.g. <code>task/</code>, <code>feature/</code>)</small>
@@ -174,22 +159,18 @@
       <small>Found in: <code>bitbucket.org/<strong>this-part</strong>/...</code></small>
     </label>
 
-    <div class="branch-config">
-      <label>Project Keys filter <span class="optional">optional</span></label>
-      <small>Leave empty to load all workspace repos.</small>
-      <div class="branch-input-row">
-        <input type="text" bind:value={bprojInput} placeholder="e.g. DIGCOM"
-          on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); bitbucketProjects = addChip(bitbucketProjects, bprojInput, true); bprojInput = ''; } }} />
-        <button type="button" on:click={() => { bitbucketProjects = addChip(bitbucketProjects, bprojInput, true); bprojInput = ''; }}>Add</button>
-      </div>
-      {#if bitbucketProjects.length}
+    {#if bitbucketProjects.length}
+      <div class="branch-config">
+        <label>Project Keys filter</label>
         <ul class="branch-tags">
           {#each bitbucketProjects as p, i}
             <li><span>{p}</span><button type="button" on:click={() => { bitbucketProjects = bitbucketProjects.filter((_, j) => j !== i); }}>&times;</button></li>
           {/each}
         </ul>
-      {/if}
-    </div>
+      </div>
+    {:else}
+      <p class="hint">No project filter — all workspace repos will load. Use <strong>↺ Load</strong> below and click <strong>+</strong> to filter.</p>
+    {/if}
 
     <div class="debug-section">
       <div class="debug-header">
