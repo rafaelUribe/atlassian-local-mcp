@@ -24,6 +24,9 @@
   let bbError = '';
   let bbProjError = '';
   let cfError = '';
+  let cfSearch = '';
+  let bbProjSearch = '';
+  let bbRepoSearch = '';
 
   let fields: Record<string, string> = {
     JIRA_HOST: '', JIRA_EMAIL: '', JIRA_TOKEN: '',
@@ -197,8 +200,11 @@
       </div>
       {#if bbProjError}<p class="debug-error">{bbProjError}</p>{/if}
       {#if bbProjects.length}
+        <div class="debug-search">
+          <input type="text" bind:value={bbProjSearch} placeholder="Filter projects…" />
+        </div>
         <ul class="debug-list">
-          {#each bbProjects as p}
+          {#each bbProjects.filter(p => !bbProjSearch || p.key.toLowerCase().includes(bbProjSearch.toLowerCase()) || p.name.toLowerCase().includes(bbProjSearch.toLowerCase())) as p}
             <li>
               <code>{p.key}</code> {p.name}
               <button type="button" class="chip-add" title="Add to filter"
@@ -218,8 +224,11 @@
       </div>
       {#if bbError}<p class="debug-error">{bbError}</p>{/if}
       {#if bbRepos.length}
+        <div class="debug-search">
+          <input type="text" bind:value={bbRepoSearch} placeholder="Filter repos…" />
+        </div>
         <ul class="debug-list">
-          {#each bbRepos as r}
+          {#each bbRepos.filter(r => !bbRepoSearch || r.slug.toLowerCase().includes(bbRepoSearch.toLowerCase()) || r.name.toLowerCase().includes(bbRepoSearch.toLowerCase())) as r}
             <li><code>{r.slug}</code> {r.name}{r.project ? ` · ${r.project}` : ''}</li>
           {/each}
         </ul>
@@ -257,8 +266,12 @@
       </div>
       {#if cfError}<p class="debug-error">{cfError}</p>{/if}
       {#if cfSpaces.length}
+        <div class="debug-search">
+          <input type="text" bind:value={cfSearch} placeholder="Filter spaces…" />
+          <span class="debug-count">{cfSpaces.filter(s => !cfSearch || s.key.toLowerCase().includes(cfSearch.toLowerCase()) || s.name.toLowerCase().includes(cfSearch.toLowerCase())).length} / {cfSpaces.length}</span>
+        </div>
         <ul class="debug-list">
-          {#each cfSpaces as s}
+          {#each cfSpaces.filter(s => !cfSearch || s.key.toLowerCase().includes(cfSearch.toLowerCase()) || s.name.toLowerCase().includes(cfSearch.toLowerCase())) as s}
             <li>
               <code>{s.key}</code> {s.name}
               <button type="button" class="chip-add" title="Add to filter"

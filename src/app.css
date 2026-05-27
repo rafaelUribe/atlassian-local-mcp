@@ -205,10 +205,25 @@ button.small { padding: 0.25rem 0.6rem; font-size: 0.78rem; }
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 220px;
+  max-height: 480px;
   overflow-y: auto;
   font-size: 0.83rem;
 }
+.debug-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.debug-search input {
+  flex: 1;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.82rem;
+  background: var(--surface2);
+}
+.debug-count { font-size: 0.78rem; color: var(--text-dim); white-space: nowrap; }
 .debug-list li {
   display: flex;
   align-items: center;
