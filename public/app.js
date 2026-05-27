@@ -193,6 +193,8 @@ document.querySelectorAll('.tools-filters .filter').forEach(btn => {
 });
 
 // ── AI Assistant (Chrome/Edge built-in model) ───────────────────────────────
+const aiTab = document.querySelector('[data-tab="ai"]');
+
 async function initAI() {
   try {
     if (!('ai' in window) || !window.ai?.languageModel) {
@@ -205,11 +207,15 @@ async function initAI() {
     document.getElementById('ai-available').classList.remove('hidden');
     document.getElementById('dash-ai').textContent = 'Available';
     document.getElementById('dash-ai').style.color = 'var(--success)';
+    aiTab.style.display = '';
   } catch {
     document.getElementById('ai-unavailable').classList.remove('hidden');
     document.getElementById('ai-available').classList.add('hidden');
-    document.getElementById('dash-ai').textContent = 'Unavailable';
+    document.getElementById('dash-ai').textContent = 'Not enabled';
     document.getElementById('dash-ai').style.color = 'var(--text-dim)';
+    // Hide AI tab from nav — show only when user clicks it from dashboard hint
+    aiTab.style.opacity = '0.5';
+    aiTab.title = 'Requires Chrome built-in AI (Gemini Nano)';
   }
 }
 

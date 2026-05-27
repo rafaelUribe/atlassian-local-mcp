@@ -140,15 +140,24 @@
     <!-- AI Assistant -->
     <section id="tab-ai" class="tab-content">
       <h1>AI Assistant</h1>
-      <div id="ai-unavailable" class="hidden">
+      <div id="ai-unavailable">
         <div class="warning-box">
-          <h3>⚠️ Built-in AI not available</h3>
-          <p>This feature requires Chrome 127+ or Edge with the built-in AI model (Gemini Nano).</p>
-          <p>Enable it at: <code>chrome://flags/#optimization-guide-on-device-model</code></p>
-          <p>Then: <code>chrome://flags/#prompt-api-for-gemini-nano</code> → Enabled</p>
+          <h3>Local AI model not detected</h3>
+          <p>This feature uses <strong>Gemini Nano</strong>, a local model that runs entirely in your browser — no API keys needed.</p>
+          <p>To enable it, open DevTools (F12) and check:</p>
+          <pre>await ai.languageModel.capabilities();</pre>
+          <p>If it returns <code>"unavailable"</code>, follow these steps:</p>
+          <ol>
+            <li>Open <code>chrome://flags</code></li>
+            <li>Set <code>#prompt-api-for-gemini-nano</code> → <strong>Enabled</strong></li>
+            <li>Set <code>#optimization-guide-on-device-model</code> → <strong>Enabled BypassPerfRequirement</strong></li>
+            <li>Navigate to <code>chrome://restart</code></li>
+            <li>Go to <code>chrome://components</code> → find <strong>Optimization Guide On Device Model</strong> → click <strong>Check for update</strong></li>
+            <li>Wait for download (~3-4 GB), then refresh this page</li>
+          </ol>
         </div>
       </div>
-      <div id="ai-available">
+      <div id="ai-available" class="hidden">
         <div class="ai-modes">
           <button class="ai-mode active" data-mode="jql">JQL Generator</button>
           <button class="ai-mode" data-mode="cql">CQL Generator</button>

@@ -280,3 +280,45 @@ Yes — the MCP server must be running. You can also run it as a background proc
 
 - Node.js >= 18
 - Atlassian Cloud account with API token
+
+---
+
+## Prerequisites: Built-in AI (Optional)
+
+The UI includes an AI assistant powered by **Gemini Nano**, a local model that runs entirely in your browser — no API keys, no cloud calls. This feature is optional; the MCP works fully without it.
+
+To enable it in **Google Chrome** (version 127+):
+
+### 1. Enable the required flags
+
+Open `chrome://flags` and configure:
+
+| Flag | Value |
+|---|---|
+| `#prompt-api-for-gemini-nano` | **Enabled** |
+| `#optimization-guide-on-device-model` | **Enabled BypassPerfRequirement** |
+
+### 2. Relaunch the browser
+
+Navigate to `chrome://restart` to fully restart Chrome (all tabs will be restored).
+
+### 3. Download the model
+
+1. Go to `chrome://components`
+2. Find **"Optimization Guide On Device Model"**
+3. Click **"Check for update"**
+4. Wait for the download to complete (~3-4 GB)
+
+> The model downloads in the background. You can continue working — just wait until the version number appears and status shows "Up-to-date".
+
+### 4. Verify installation
+
+Open DevTools (F12) → Console and run:
+
+```js
+await ai.languageModel.capabilities();
+```
+
+You should see `available: "readily"`. If it says `"after-download"`, the model is still downloading.
+
+> **Note:** If you don't enable this, the AI tab in the UI simply won't appear — all other features (config, tools explorer, dashboard) work normally.
