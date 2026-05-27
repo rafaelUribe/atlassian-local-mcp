@@ -368,8 +368,6 @@ function renderAiContent(el, text, role) {
     el.textContent = text;
   }
 }
-  container.scrollTop = container.scrollHeight;
-}
 
 function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
