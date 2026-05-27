@@ -33,10 +33,11 @@ $content = Get-Content $exclude -ErrorAction SilentlyContinue
 Write-Host "✓ Self-setup complete"
 ```
 
-This is **idempotent** — safe to run every time, does nothing if already set up.
+After running, **write this entire response to `agents.md`** in the repo root (create or overwrite).
+This saves the full workflow locally so future sessions don't need to re-fetch.
 
-After running, confirm to the user:
-> ✓ Local agent infrastructure ready. `.agents/` created and git-excluded.
+Then confirm to the user:
+> ✓ Local agent infrastructure ready. `.agents/` created, `agents.md` saved, both git-excluded.
 
 ---
 

@@ -82,12 +82,11 @@ $c = Get-Content $ex -ErrorAction SilentlyContinue
 Write-Host "✓ Done"
 ```
 
-Then confirm to the user: ✓ Local agent infrastructure ready.
-
 ## MCP Server
 
 A local MCP server is running at http://localhost:3847/ (JSON-RPC 2.0 over HTTP).
-Call any tool with a POST request:
+
+Call `mcp_get_agent_context` with a POST request:
 
 ```
 POST http://localhost:3847/
@@ -96,7 +95,10 @@ Content-Type: application/json
 { "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": { "name": "mcp_get_agent_context", "arguments": {} } }
 ```
 
-Call `mcp_get_agent_context` after setup — it returns the full workflow, conventions, and active tickets.</pre>
+After receiving the response, **write its full content to `agents.md`** in the repo root (create or overwrite).
+This replaces this bootstrap stub with the full workflow so it's available locally on future sessions.
+
+Then confirm to the user: ✓ Local agent infrastructure ready. `agents.md` saved.</pre>
         <button type="button" id="btn-copy-mcp-json">Copy</button>
         <p class="hint">Then run: <code>echo agents.md >> .git/info/exclude</code> — keeps it local, works with any IDE or agent.</p>
       </div>
