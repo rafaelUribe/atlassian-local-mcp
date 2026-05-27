@@ -1,6 +1,6 @@
 # atlassian-local-mcp
 
-Local MCP server that exposes **51 tools** for Jira, Confluence and Bitbucket as a JSON-RPC 2.0 HTTP endpoint.
+Local MCP server that exposes **52 tools** for Jira, Confluence, Bitbucket and agent context as a JSON-RPC 2.0 HTTP endpoint.
 Designed to be consumed by AI agents (GitHub Copilot, Cursor, etc.) running inside any repo on your machine.
 
 ---
@@ -19,61 +19,33 @@ The server starts on `http://localhost:3847/` and writes `mcp.info` so other scr
 
 ---
 
-## Team setup (idempotent)
+## How agents get context (no local files needed)
 
-### Windows (PowerShell)
-
-```powershell
-# Run once per machine — safe to re-run
-.\setup\setup.ps1
-```
-
-The script:
-1. Installs `npm` dependencies.
-2. Creates `.env` from `.env.example` if it does not exist (then opens it for editing).
-3. Adds `ATLASSIAN_MCP_DIR` to your user `PATH` environment so helpers are always reachable.
-4. Writes a `start-mcp.bat` shortcut next to the repo root for quick launching.
-
-### macOS / Linux (bash)
+The server exposes a tool called **`mcp_get_agent_context`**. Any AI agent can call it at session start to load the full workflow instructions (Confluence docs workflow, ticket initialization, progress logging, git conventions).
 
 ```bash
-chmod +x setup/setup.sh
-./setup/setup.sh
+curl -s -X POST http://localhost:3847/ \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"mcp_get_agent_context","arguments":{}}}' \
+  | jq -r '.result.content[0].text'
 ```
+
+This means your teammates don't need to copy files into their repos. They just need:
+1. The MCP server running locally.
+2. Their AI agent configured to call `http://localhost:3847/`.
+
+If you prefer a static file, you can still manually copy [`agents/agents-template.md`](agents/agents-template.md) into your repo.
 
 ---
 
-## Injecting `agents.md` into your repos (idempotent)
-
-The `agents-template.md` contains the workflow instructions that AI agents need to use this MCP correctly.
-You can inject it into any Git repo on your machine without committing it:
-
-### Windows
-
-```powershell
-.\setup\inject-agents.ps1 -RepoPath C:\path\to\your-repo
-```
-
-### macOS / Linux
-
-```bash
-./setup/inject-agents.sh /path/to/your-repo
-```
-
-What the inject script does:
-- Creates `.agents/agents.md` inside the target repo (from `agents/agents-template.md`).
-- Adds `.agents/agents.md`, `.env` and `mcp.info` to the repo's `.git/info/exclude` (local-only gitignore, never committed).
-- Safe to run multiple times — skips if already present.
-
----
-
-## Tools (51 total)
+## Tools (52 total)
 
 | Category | Count | Example tools |
 |---|---|---|
 | Jira | 20 | `jira_get_ticket`, `jira_search_tickets`, `jira_create_ticket`, `jira_get_sprint_tickets` |
 | Confluence | 14 | `confluence_search`, `confluence_get_page`, `confluence_create_page`, `confluence_update_page` |
 | Bitbucket | 17 | `bitbucket_get_pull_requests`, `bitbucket_create_pull_request`, `bitbucket_get_diff`, `bitbucket_get_file` |
+| Meta | 1 | `mcp_get_agent_context` |
 
 To list all tools at runtime:
 
@@ -83,8 +55,6 @@ $r = Invoke-RestMethod http://localhost:3847/ -Method Post -ContentType applicat
 $r.result.tools.name
 ```
 
-Or:
-
 ```bash
 curl -s -X POST http://localhost:3847/ \
   -H 'Content-Type: application/json' \
@@ -93,25 +63,11 @@ curl -s -X POST http://localhost:3847/ \
 
 ---
 
-## URL discovery from other scripts
+## Agent context workflow
 
-```js
-const info = JSON.parse(fs.readFileSync('path/to/mcp.info', 'utf8'));
-// or: process.env.ATLASSIAN_MCP_URL || 'http://localhost:3847/'
-```
+The `mcp_get_agent_context` tool returns the content of [`agents/agents-template.md`](agents/agents-template.md).
 
-```powershell
-node path/to/atlassian-local-mcp/read-mcp.js   # prints URL
-node path/to/atlassian-local-mcp/read-mcp.js --json  # prints full JSON
-```
-
----
-
-## Agents.md workflow
-
-See [`agents/agents-template.md`](agents/agents-template.md) for the full instructions that should live in each repo.
-
-Key conventions enforced by the template:
+Key conventions enforced:
 
 1. **Cache-first ticket init** — reads `.agents/[TICKET_ID].md` before calling Jira.
 2. **Clean Confluence docs** — search → read 2 pages → propose → confirm → create.

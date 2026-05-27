@@ -612,6 +612,16 @@ const TOOLS = [
       type: 'object',
       properties: {}
     }
+  },
+
+  // ── Meta ─────────────────────────────────────────────────────────────────────
+  {
+    name: 'mcp_get_agent_context',
+    description: 'Returns the agents-template.md content — workflow instructions for AI agents (Confluence docs workflow, ticket init, progress logging, git conventions). Call this at the start of every session to load context.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    }
   }
 ];
 
@@ -1395,6 +1405,19 @@ function dispatchTool(id, name, args, respondFn) {
         sendText(id, `Miembros del workspace ${BITBUCKET_WORKSPACE} (${lines.length}):\n\n${lines.join('\n')}`);
       });
     }
+
+    // ── Meta tools ──────────────────────────────────────────────────────────────
+    case 'mcp_get_agent_context': {
+      const templatePath = require('path').join(__dirname, 'agents', 'agents-template.md');
+      try {
+        const content = require('fs').readFileSync(templatePath, 'utf8');
+        return sendText(id, content);
+      } catch (e) {
+        return sendError(id, new Error(`Cannot read agents-template.md: ${e.message}`));
+      }
+    }
+
+    default:
       sendText(id, `Herramienta desconocida: ${name}`);
   }
 }
