@@ -14,8 +14,14 @@ if (!ATLASSIAN_HOST) missing.push('JIRA_HOST');
 if (!ATLASSIAN_EMAIL) missing.push('JIRA_EMAIL');
 if (!ATLASSIAN_TOKEN) missing.push('JIRA_TOKEN');
 if (missing.length) {
-  process.stderr.write(`ERROR: Missing required env vars in .env: ${missing.join(', ')}\n`);
-  process.stderr.write('       Copy .env.example to .env and fill in your credentials.\n');
+  process.stderr.write('\n╔══════════════════════════════════════════════════════════╗\n');
+  process.stderr.write('║  Missing required credentials in .env                    ║\n');
+  process.stderr.write('╚══════════════════════════════════════════════════════════╝\n\n');
+  for (const v of missing) {
+    process.stderr.write(`  ✗ ${v} — not set\n`);
+  }
+  process.stderr.write('\n  Fix: open .env and fill in the missing values.\n');
+  process.stderr.write('  See README.md → "Credentials setup" for details.\n\n');
   process.exit(1);
 }
 
