@@ -1,0 +1,19 @@
+{
+  "name": "atlassian-local-mcp",
+  "version": "1.0.0",
+  "description": "Local MCP server for Jira, Confluence and Bitbucket — AI agent workflows for dev teams",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "start:http": "node server.js --http 3847 --host 0.0.0.0",
+    "url": "node read-mcp.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["mcp", "jira", "confluence", "bitbucket", "atlassian", "ai-agents", "copilot"],
+  "license": "MIT"
+}
