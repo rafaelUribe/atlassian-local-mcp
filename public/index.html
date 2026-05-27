@@ -63,13 +63,15 @@
         <h2>Server Credentials (.env)</h2>
         <p class="hint">These are stored only in this MCP repo's <code>.env</code> file. Never committed.</p>
         <form id="form-env">
-          <label>JIRA_HOST <span class="required">*</span>
+          <label>Atlassian Domain <span class="required">*</span>
             <input type="text" name="JIRA_HOST" placeholder="your-company.atlassian.net">
+            <small>Your company's Atlassian cloud domain</small>
           </label>
-          <label>JIRA_EMAIL <span class="required">*</span>
+          <label>Company Email <span class="required">*</span>
             <input type="email" name="JIRA_EMAIL" placeholder="you@company.com">
+            <small>The email associated with your Atlassian account</small>
           </label>
-          <label>JIRA_TOKEN <span class="required">*</span>
+          <label>Atlassian API Token <span class="required">*</span>
             <input type="password" name="JIRA_TOKEN" placeholder="Your API token">
             <small><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank">Generate token ↗</a></small>
           </label>
