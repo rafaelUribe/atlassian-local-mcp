@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getConfig, saveConfig } from '../lib/api';
+  import { getConfig, saveConfig, getBitbucketRepos, getBitbucketProjects, getConfluenceSpaces } from '../lib/api';
   import { configured } from '../lib/stores';
 
-  // Chip arrays
+  let activeTab: 'auth' | 'jira' | 'bitbucket' | 'confluence' = 'auth';
+
   let baseBranches: string[] = [];
   let confluenceSpaces: string[] = [];
   let bitbucketProjects: string[] = [];
@@ -11,33 +12,49 @@
   let cspaceInput = '';
   let bprojInput = '';
 
-  // Form status
   let status = '';
   let statusOk = true;
 
-  // Form field values
+  let bbRepos: { slug: string; name: string; project?: string }[] = [];
+  let bbProjects: { key: string; name: string }[] = [];
+  let cfSpaces: { key: string; name: string }[] = [];
+  let bbLoading = false;
+  let bbProjLoading = false;
+  let cfLoading = false;
+  let bbError = '';
+  let bbProjError = '';
+  let cfError = '';
+
   let fields: Record<string, string> = {
     JIRA_HOST: '', JIRA_EMAIL: '', JIRA_TOKEN: '',
     BITBUCKET_WORKSPACE: '', BRANCH_PREFIX: 'task/',
     HTTP_PORT: '3847', JIRA_EPIC: '',
   };
 
-  function addBranch() {
-    const v = branchInput.trim();
-    if (v && !baseBranches.includes(v)) baseBranches = [...baseBranches, v];
-    branchInput = '';
+  function addChip(arr: string[], val: string, upper = false): string[] {
+    const v = upper ? val.trim().toUpperCase() : val.trim();
+    return v && !arr.includes(v) ? [...arr, v] : arr;
   }
 
-  function addCSpace() {
-    const v = cspaceInput.trim().toUpperCase();
-    if (v && !confluenceSpaces.includes(v)) confluenceSpaces = [...confluenceSpaces, v];
-    cspaceInput = '';
+  async function testBitbucketRepos() {
+    bbLoading = true; bbError = '';
+    try { bbRepos = await getBitbucketRepos(); }
+    catch (e: unknown) { bbError = e instanceof Error ? e.message : String(e); }
+    finally { bbLoading = false; }
   }
 
-  function addBProj() {
-    const v = bprojInput.trim().toUpperCase();
-    if (v && !bitbucketProjects.includes(v)) bitbucketProjects = [...bitbucketProjects, v];
-    bprojInput = '';
+  async function testBitbucketProjects() {
+    bbProjLoading = true; bbProjError = '';
+    try { bbProjects = await getBitbucketProjects(); }
+    catch (e: unknown) { bbProjError = e instanceof Error ? e.message : String(e); }
+    finally { bbProjLoading = false; }
+  }
+
+  async function testConfluenceSpaces() {
+    cfLoading = true; cfError = '';
+    try { cfSpaces = await getConfluenceSpaces(); }
+    catch (e: unknown) { cfError = e instanceof Error ? e.message : String(e); }
+    finally { cfLoading = false; }
   }
 
   async function handleSubmit() {
@@ -51,7 +68,6 @@
     if (result.ok) {
       status = '✓ Saved! Server restarting…';
       statusOk = true;
-      // Poll until server is back, then reload
       setTimeout(async () => {
         for (let i = 0; i < 10; i++) {
           try { await fetch('/health'); window.location.reload(); return; } catch {}
@@ -80,47 +96,88 @@
           fields[k] = v;
         }
       }
-      fields = { ...fields }; // trigger reactivity
+      fields = { ...fields };
     } catch {}
   });
 </script>
 
 <h1>Configuration</h1>
 
-<div class="config-section">
-  <h2>Server Credentials (.env)</h2>
-  <p class="hint">Stored only in this MCP repo's <code>.env</code> — never committed.</p>
+<div class="cfg-tabs">
+  <button class:active={activeTab === 'auth'}      on:click={() => activeTab = 'auth'}>🔑 Auth</button>
+  <button class:active={activeTab === 'jira'}      on:click={() => activeTab = 'jira'}>Jira</button>
+  <button class:active={activeTab === 'bitbucket'} on:click={() => activeTab = 'bitbucket'}>Bitbucket</button>
+  <button class:active={activeTab === 'confluence'} on:click={() => activeTab = 'confluence'}>Confluence</button>
+</div>
 
-  <form on:submit|preventDefault={handleSubmit}>
+<form on:submit|preventDefault={handleSubmit}>
+
+  {#if activeTab === 'auth'}
+  <div class="config-section">
+    <h2>Atlassian Credentials</h2>
+    <p class="hint">Stored only in <code>.env</code> — never committed.</p>
+
     <label>Atlassian Domain <span class="required">*</span>
       <input type="text" bind:value={fields.JIRA_HOST} placeholder="your-company.atlassian.net" />
-      <small>Your company's Atlassian cloud domain</small>
+      <small>Without https:// — e.g. <code>oreillyauto.atlassian.net</code></small>
     </label>
-
     <label>Company Email <span class="required">*</span>
       <input type="email" bind:value={fields.JIRA_EMAIL} placeholder="you@company.com" />
     </label>
-
     <label>Atlassian API Token <span class="required">*</span>
       <input type="password" bind:value={fields.JIRA_TOKEN} placeholder="Your API token" />
       <small><a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">Generate token ↗</a></small>
     </label>
+    <label>HTTP Port
+      <input type="number" bind:value={fields.HTTP_PORT} placeholder="3847" />
+    </label>
+  </div>
+  {/if}
 
-    <label>Bitbucket Workspace <span class="optional">optional</span>
+  {#if activeTab === 'jira'}
+  <div class="config-section">
+    <h2>Jira Settings</h2>
+    <label>Epic / Project filter <span class="optional">optional</span>
+      <input type="text" bind:value={fields.JIRA_EPIC} placeholder="B2B-123 or project = B2B" />
+      <small>Epic key or JQL — cache only indexes tickets under this scope</small>
+    </label>
+    <div class="branch-config">
+      <label>Base Branches</label>
+      <div class="branch-input-row">
+        <input type="text" bind:value={branchInput} placeholder="e.g. develop"
+          on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); baseBranches = addChip(baseBranches, branchInput); branchInput = ''; } }} />
+        <button type="button" on:click={() => { baseBranches = addChip(baseBranches, branchInput); branchInput = ''; }}>Add</button>
+      </div>
+      {#if baseBranches.length}
+        <ul class="branch-tags">
+          {#each baseBranches as b, i}
+            <li><span>{b}</span><button type="button" on:click={() => { baseBranches = baseBranches.filter((_, j) => j !== i); }}>&times;</button></li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
+    <label>Branch Prefix
+      <input type="text" bind:value={fields.BRANCH_PREFIX} placeholder="task/" />
+      <small>Prefix for feature branches (e.g. <code>task/</code>, <code>feature/</code>)</small>
+    </label>
+  </div>
+  {/if}
+
+  {#if activeTab === 'bitbucket'}
+  <div class="config-section">
+    <h2>Bitbucket Settings</h2>
+    <label>Workspace <span class="optional">optional</span>
       <input type="text" bind:value={fields.BITBUCKET_WORKSPACE} placeholder="your-workspace-slug" />
-      <small>Found in: bitbucket.org/<strong>{'{this-part}'}</strong></small>
+      <small>Found in: <code>bitbucket.org/<strong>this-part</strong>/...</code></small>
     </label>
 
-    <!-- Bitbucket Projects chips -->
     <div class="branch-config">
-      <label>Bitbucket Projects <span class="optional">optional</span></label>
-      <small>Filter repos by project key (e.g. <code>DIGCOM</code>, <code>FIRSTCALL</code>). Leave empty to load all workspace repos.</small>
+      <label>Project Keys filter <span class="optional">optional</span></label>
+      <small>Leave empty to load all workspace repos.</small>
       <div class="branch-input-row">
-        <input
-          type="text" bind:value={bprojInput} placeholder="e.g. DIGCOM"
-          on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBProj(); } }}
-        />
-        <button type="button" on:click={addBProj}>Add</button>
+        <input type="text" bind:value={bprojInput} placeholder="e.g. DIGCOM"
+          on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); bitbucketProjects = addChip(bitbucketProjects, bprojInput, true); bprojInput = ''; } }} />
+        <button type="button" on:click={() => { bitbucketProjects = addChip(bitbucketProjects, bprojInput, true); bprojInput = ''; }}>Add</button>
       </div>
       {#if bitbucketProjects.length}
         <ul class="branch-tags">
@@ -131,16 +188,56 @@
       {/if}
     </div>
 
-    <!-- Confluence Spaces chips -->
+    <div class="debug-section">
+      <div class="debug-header">
+        <span>All workspace projects</span>
+        <button type="button" class="secondary small" on:click={testBitbucketProjects} disabled={bbProjLoading}>
+          {bbProjLoading ? 'Loading…' : '↺ Load'}
+        </button>
+      </div>
+      {#if bbProjError}<p class="debug-error">{bbProjError}</p>{/if}
+      {#if bbProjects.length}
+        <ul class="debug-list">
+          {#each bbProjects as p}
+            <li>
+              <code>{p.key}</code> {p.name}
+              <button type="button" class="chip-add" title="Add to filter"
+                on:click={() => { bitbucketProjects = addChip(bitbucketProjects, p.key, true); }}>+</button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
+
+    <div class="debug-section">
+      <div class="debug-header">
+        <span>Repos (current project filter)</span>
+        <button type="button" class="secondary small" on:click={testBitbucketRepos} disabled={bbLoading}>
+          {bbLoading ? 'Loading…' : '↺ Load'}
+        </button>
+      </div>
+      {#if bbError}<p class="debug-error">{bbError}</p>{/if}
+      {#if bbRepos.length}
+        <ul class="debug-list">
+          {#each bbRepos as r}
+            <li><code>{r.slug}</code> {r.name}{r.project ? ` · ${r.project}` : ''}</li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
+  </div>
+  {/if}
+
+  {#if activeTab === 'confluence'}
+  <div class="config-section">
+    <h2>Confluence Settings</h2>
     <div class="branch-config">
-      <label>Confluence Spaces <span class="optional">optional</span></label>
-      <small>Only these spaces will be indexed/cached. Leave empty to allow all.</small>
+      <label>Space Keys filter <span class="optional">optional</span></label>
+      <small>Only these spaces will be indexed. Leave empty to allow all global spaces.</small>
       <div class="branch-input-row">
-        <input
-          type="text" bind:value={cspaceInput} placeholder="e.g. B2B"
-          on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCSpace(); } }}
-        />
-        <button type="button" on:click={addCSpace}>Add</button>
+        <input type="text" bind:value={cspaceInput} placeholder="e.g. B2B"
+          on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confluenceSpaces = addChip(confluenceSpaces, cspaceInput, true); cspaceInput = ''; } }} />
+        <button type="button" on:click={() => { confluenceSpaces = addChip(confluenceSpaces, cspaceInput, true); cspaceInput = ''; }}>Add</button>
       </div>
       {#if confluenceSpaces.length}
         <ul class="branch-tags">
@@ -151,44 +248,34 @@
       {/if}
     </div>
 
-    <label>Jira Epic <span class="optional">optional</span>
-      <input type="text" bind:value={fields.JIRA_EPIC} placeholder="B2B-123 or project = B2B" />
-      <small>Epic key or JQL — cache only indexes tickets under this epic/project</small>
-    </label>
-
-    <!-- Base Branches chips -->
-    <div class="branch-config">
-      <label>Base Branches</label>
-      <div class="branch-input-row">
-        <input
-          type="text" bind:value={branchInput} placeholder="e.g. develop"
-          on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBranch(); } }}
-        />
-        <button type="button" on:click={addBranch}>Add</button>
+    <div class="debug-section">
+      <div class="debug-header">
+        <span>Available global spaces</span>
+        <button type="button" class="secondary small" on:click={testConfluenceSpaces} disabled={cfLoading}>
+          {cfLoading ? 'Loading…' : '↺ Load'}
+        </button>
       </div>
-      {#if baseBranches.length}
-        <ul class="branch-tags">
-          {#each baseBranches as b, i}
-            <li><span>{b}</span><button type="button" on:click={() => { baseBranches = baseBranches.filter((_, j) => j !== i); }}>&times;</button></li>
+      {#if cfError}<p class="debug-error">{cfError}</p>{/if}
+      {#if cfSpaces.length}
+        <ul class="debug-list">
+          {#each cfSpaces as s}
+            <li>
+              <code>{s.key}</code> {s.name}
+              <button type="button" class="chip-add" title="Add to filter"
+                on:click={() => { confluenceSpaces = addChip(confluenceSpaces, s.key, true); }}>+</button>
+            </li>
           {/each}
         </ul>
       {/if}
     </div>
+  </div>
+  {/if}
 
-    <label>Branch Prefix
-      <input type="text" bind:value={fields.BRANCH_PREFIX} placeholder="task/" />
-      <small>Prefix for new feature branches (e.g. task/, feature/)</small>
-    </label>
+  <div class="form-actions">
+    <button type="submit">Save .env</button>
+    {#if status}
+      <span style="font-size:0.85rem; color: {statusOk ? 'var(--success)' : 'var(--danger)'}">{status}</span>
+    {/if}
+  </div>
 
-    <label>HTTP Port
-      <input type="number" bind:value={fields.HTTP_PORT} placeholder="3847" />
-    </label>
-
-    <div class="form-actions">
-      <button type="submit">Save .env</button>
-      {#if status}
-        <span style="font-size:0.85rem; color: {statusOk ? 'var(--success)' : 'var(--danger)'}">{status}</span>
-      {/if}
-    </div>
-  </form>
-</div>
+</form>

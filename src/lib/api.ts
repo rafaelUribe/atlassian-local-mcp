@@ -53,9 +53,23 @@ export async function getCachedTickets(): Promise<import('./types').CachedTicket
   return res.json();
 }
 
-export async function getBitbucketRepos(): Promise<{ slug: string; name: string }[]> {
+export async function getBitbucketRepos(): Promise<{ slug: string; name: string; project?: string }[]> {
   const res = await fetch(`${BASE}/api/bitbucket/repos`);
   return res.json();
+}
+
+export async function getBitbucketProjects(): Promise<{ key: string; name: string }[]> {
+  const res = await fetch(`${BASE}/api/bitbucket/projects`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data.projects ?? [];
+}
+
+export async function getConfluenceSpaces(): Promise<{ key: string; name: string }[]> {
+  const res = await fetch(`${BASE}/api/confluence/spaces`);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data.spaces ?? [];
 }
 
 export async function pinRepos(ticketId: string, pinnedRepos: string[]): Promise<{ ok: boolean }> {

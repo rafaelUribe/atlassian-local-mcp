@@ -163,6 +163,77 @@ button.secondary { background: var(--surface2); border: 1px solid var(--border);
 button.secondary:hover { background: var(--border); }
 
 /* Forms */
+.cfg-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+}
+.cfg-tabs button {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--text-dim);
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.cfg-tabs button:hover { color: var(--text); background: transparent; }
+.cfg-tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.debug-section {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.debug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface2);
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+button.small { padding: 0.25rem 0.6rem; font-size: 0.78rem; }
+.debug-error { color: var(--danger); font-size: 0.82rem; margin: 0.5rem 0.75rem; }
+.debug-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 0.83rem;
+}
+.debug-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+}
+.debug-list li code { color: var(--accent); background: none; font-family: var(--mono); font-size: 0.8rem; }
+button.chip-add {
+  margin-left: auto;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 1.3rem;
+  height: 1.3rem;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+button.chip-add:hover { background: var(--accent); color: #fff; }
+
 .config-section {
   background: var(--surface);
   border: 1px solid var(--border);
