@@ -78,6 +78,8 @@ nav {
 
 .status-dot.error { background: var(--danger); }
 
+.last-check { color: var(--text-dim); font-size: 0.8rem; margin-top: 0.5rem; }
+
 /* Main content */
 main {
   max-width: 1200px;

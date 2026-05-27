@@ -29,6 +29,7 @@ async function refreshDashboard() {
     document.querySelector('.status-dot').classList.add('error');
     document.getElementById('status-text').textContent = 'Disconnected';
   }
+  document.getElementById('dash-last-check').textContent = new Date().toLocaleTimeString();
 }
 
 function formatUptime(seconds) {
@@ -446,5 +447,5 @@ function switchToTab(tabName) {
     switchToTab('config');
   }
 
-  setInterval(refreshDashboard, 10000);
+  setInterval(refreshDashboard, 30000);
 })();
