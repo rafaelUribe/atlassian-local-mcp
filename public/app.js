@@ -85,6 +85,18 @@ document.getElementById('btn-health').addEventListener('click', async () => {
 });
 
 // ── Prompt Builder ──────────────────────────────────────────────────────────
+
+// Step 1: Copy mcp.json
+document.getElementById('btn-copy-mcp-json').addEventListener('click', () => {
+  const snippet = document.getElementById('mcp-json-snippet').textContent;
+  navigator.clipboard.writeText(snippet).then(() => {
+    const btn = document.getElementById('btn-copy-mcp-json');
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+  });
+});
+
+// Step 2: Copy prompt
 function buildPrompt(ticketId) {
   return `Start ticket ${ticketId}`;
 }

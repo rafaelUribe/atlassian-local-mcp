@@ -57,11 +57,26 @@
 
       <h2>Start Working on a Ticket</h2>
       <div class="prompt-builder">
+        <h3>1. Connect your repo (one time)</h3>
+        <p class="hint">Create <code>.vscode/mcp.json</code> in your working repo so Copilot discovers the MCP tools:</p>
+        <div class="setup-block">
+          <pre id="mcp-json-snippet">{
+  "servers": {
+    "atlassian": {
+      "type": "http",
+      "url": "http://localhost:3847/"
+    }
+  }
+}</pre>
+          <button type="button" id="btn-copy-mcp-json">Copy</button>
+        </div>
+
+        <h3>2. Start a ticket</h3>
+        <p class="hint">Once connected, paste this into your Copilot agent chat:</p>
         <div class="prompt-input-row">
           <input type="text" id="ticket-input" placeholder="RWD-1234">
           <button type="button" id="btn-copy-prompt">Copy Prompt</button>
         </div>
-        <p class="hint">Paste into your Copilot agent chat. The agent will call <code>mcp_get_agent_context</code> automatically — that tool returns the full workflow (Jira fetch, Confluence search, git branch setup, context file creation).</p>
         <pre id="prompt-output" class="prompt-preview"></pre>
       </div>
     </section>
