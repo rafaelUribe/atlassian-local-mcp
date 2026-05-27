@@ -128,14 +128,80 @@ The file contains the same instructions returned by `mcp_get_agent_context`. Bot
 
 ## Tools (52 total)
 
-| Category | Count | Example tools |
-|---|---|---|
-| Jira | 20 | `jira_get_ticket`, `jira_search_tickets`, `jira_create_ticket`, `jira_get_sprint_tickets` |
-| Confluence | 14 | `confluence_search`, `confluence_get_page`, `confluence_create_page`, `confluence_update_page` |
-| Bitbucket | 17 | `bitbucket_get_pull_requests`, `bitbucket_create_pull_request`, `bitbucket_get_diff`, `bitbucket_get_file` |
-| Meta | 1 | `mcp_get_agent_context` |
+### Jira (20 tools)
 
-List all tools at runtime:
+| Tool | What it does |
+|---|---|
+| `jira_search_tickets` | Search issues with JQL |
+| `jira_get_ticket` | Full ticket details (description, comments, subtasks, sprint) |
+| `jira_get_my_tickets` | Your assigned in-progress/pending tickets |
+| `jira_get_projects` | List all projects |
+| `jira_get_boards` | List Scrum/Kanban boards (get boardId for sprints) |
+| `jira_get_sprints` | List sprints for a board |
+| `jira_get_sprint_tickets` | Tickets in active sprint |
+| `jira_create_ticket` | Create a new issue |
+| `jira_update_ticket` | Update fields (summary, description, priority, assignee, labels) |
+| `jira_transition_ticket` | Move ticket to a new status |
+| `jira_get_transitions` | List available status transitions |
+| `jira_add_comment` | Add a comment |
+| `jira_delete_comment` | Delete a comment |
+| `jira_get_issue_types` | List issue types (Story, Bug, Task…) |
+| `jira_link_issues` | Link two tickets (blocks, relates to…) |
+| `jira_get_link_types` | List available link types |
+| `jira_get_user` | Search users by name/email (get accountId) |
+| `jira_get_fields` | List all custom fields |
+| `jira_get_project_components` | List project components |
+| `jira_get_project_versions` | List Fix Versions |
+| `jira_get_changelogs` | Ticket change history |
+
+### Confluence (14 tools)
+
+| Tool | What it does |
+|---|---|
+| `confluence_search` | Search pages with CQL |
+| `confluence_get_page` | Full page content by ID |
+| `confluence_get_spaces` | List all spaces |
+| `confluence_get_space_pages` | List pages in a space |
+| `confluence_create_page` | Create a new page |
+| `confluence_update_page` | Update page content |
+| `confluence_delete_page` | Delete a page |
+| `confluence_get_page_children` | List child pages |
+| `confluence_add_comment` | Add a comment to a page |
+| `confluence_get_page_comments` | List page comments |
+| `confluence_get_page_labels` | List page labels |
+| `confluence_add_page_label` | Add a label to a page |
+| `confluence_get_page_attachments` | List page attachments |
+
+### Bitbucket (17 tools) — requires `BITBUCKET_WORKSPACE`
+
+| Tool | What it does |
+|---|---|
+| `bitbucket_get_repos` | List workspace repositories |
+| `bitbucket_get_pull_requests` | List PRs (open/merged/declined) |
+| `bitbucket_get_pull_request` | Full PR details |
+| `bitbucket_create_pull_request` | Create a new PR |
+| `bitbucket_add_pr_comment` | Comment on a PR |
+| `bitbucket_get_pr_comments` | List PR comments |
+| `bitbucket_approve_pr` | Approve a PR |
+| `bitbucket_unapprove_pr` | Remove approval |
+| `bitbucket_merge_pr` | Merge a PR |
+| `bitbucket_decline_pr` | Decline a PR |
+| `bitbucket_get_branches` | List branches |
+| `bitbucket_get_commits` | List commits from a branch |
+| `bitbucket_get_diff` | Get PR diff |
+| `bitbucket_get_file` | Read a file from a branch |
+| `bitbucket_get_pipelines` | List recent pipelines |
+| `bitbucket_get_pipeline` | Pipeline details |
+| `bitbucket_list_workspace_members` | List workspace members |
+
+### Meta (1 tool)
+
+| Tool | What it does |
+|---|---|
+| `mcp_get_agent_context` | Returns workflow instructions for AI agents (call at session start) |
+
+<details>
+<summary>List all tools at runtime</summary>
 
 ```powershell
 $r = Invoke-RestMethod http://localhost:3847/ -Method Post -ContentType application/json `
@@ -148,6 +214,7 @@ curl -s -X POST http://localhost:3847/ \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | jq '.result.tools[].name'
 ```
+</details>
 
 ---
 
@@ -214,7 +281,7 @@ HTTP_BIND=0.0.0.0
 | `JIRA_HOST` | Your Atlassian URL without `https://` — e.g. `acme.atlassian.net` |
 | `JIRA_EMAIL` | The email you log into Atlassian with |
 | `JIRA_TOKEN` | The API token from step 1 |
-| `BITBUCKET_WORKSPACE` | The slug in your Bitbucket URL: `bitbucket.org/<this-part>` |
+| `BITBUCKET_WORKSPACE` | **Optional.** Go to `https://bitbucket.org/` → your workspace name is in the URL: `bitbucket.org/{workspace}`. Only needed if you plan to use Bitbucket tools. |
 
 ### 3. Start
 
