@@ -988,6 +988,38 @@ function startHttpServer(port, bindHost) {
         }
       }
 
+      // Cache — list all cached tickets as JSON
+      if (url.pathname === '/api/cache/tickets') {
+        try {
+          if (!fs.existsSync(CACHE_DIR)) { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('[]'); }
+          const dirs = fs.readdirSync(CACHE_DIR).filter(d => fs.statSync(path.join(CACHE_DIR, d)).isDirectory());
+          const tickets = dirs.map(id => ({
+            id,
+            context:  cacheRead(id, 'context.json'),
+            repos:    cacheRead(id, 'repos.json')    || [],
+            articles: cacheRead(id, 'articles.json') || [],
+            related:  cacheRead(id, 'related.json')  || [],
+            timeline: cacheRead(id, 'timeline.json') || [],
+            pinned:   cacheRead(id, 'pinned.json')   || [],
+          }));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify(tickets));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: err.message }));
+        }
+      }
+
+      // Bitbucket repos list for UI multi-select
+      if (url.pathname === '/api/bitbucket/repos') {
+        if (!BITBUCKET_WORKSPACE) { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end('[]'); }
+        return fetchBitbucket(`/2.0/repositories/${encodeURIComponent(BITBUCKET_WORKSPACE)}?pagelen=50`, 'GET', null, (err, data) => {
+          const repos = err ? [] : (data.values || []).map(r => ({ slug: r.slug, name: r.name || r.slug }));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(repos));
+        });
+      }
+
       // Serve UI static files
       return serveStatic(url.pathname, res);
     }
@@ -996,6 +1028,24 @@ function startHttpServer(port, bindHost) {
     if (req.method !== 'POST') { res.writeHead(405); return res.end('Method Not Allowed'); }
 
     const url = new URL(req.url, `http://${req.headers.host}`);
+
+    // Cache — pin repos for a ticket
+    if (url.pathname === '/api/cache/pin') {
+      let body = '';
+      req.on('data', c => { body += c; });
+      req.on('end', () => {
+        try {
+          const { ticketId, pinnedRepos } = JSON.parse(body);
+          cacheWrite(String(ticketId).toUpperCase(), 'pinned.json', pinnedRepos);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+        } catch (err) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: err.message }));
+        }
+      });
+      return;
+    }
 
     // Config API — save .env
     if (url.pathname === '/api/config') {
