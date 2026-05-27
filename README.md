@@ -10,8 +10,8 @@ Designed for AI coding agents (GitHub Copilot, Cursor, Windsurf, etc.) to consum
 ```bash
 git clone git@github.com:rafaelUribe/atlassian-local-mcp.git
 cd atlassian-local-mcp
-npm install
-cp .env.example .env   # fill in your credentials
+npm install          # creates .env automatically + configures git exclude
+# edit .env with your credentials
 npm start
 ```
 
@@ -108,11 +108,7 @@ Each developer needs a personal Atlassian API token. One-time setup:
 
 ### 2. Fill in `.env`
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
+After `npm install`, a `.env` file is created automatically from `.env.example`. Just edit it:
 
 ```env
 JIRA_HOST=<your-domain>.atlassian.net
