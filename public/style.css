@@ -78,7 +78,7 @@ nav {
 
 .status-dot.error { background: var(--danger); }
 
-.last-check { color: var(--text-dim); font-size: 0.8rem; margin-top: 0.5rem; }
+.last-check { color: var(--text-dim); font-size: 0.9rem; margin-top: 1rem; padding: 0.5rem 0.8rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); display: inline-block; }
 
 /* Main content */
 main {
