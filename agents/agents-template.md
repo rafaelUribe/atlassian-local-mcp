@@ -8,6 +8,10 @@
 ## ⚡ DO THIS NOW — Mandatory Self-Setup
 
 > **Execute immediately after reading this file. Do not wait for a user command.**
+>
+> **If you are in Ask or Plan mode and cannot run terminal commands, stop and ask the user:**
+> "I need to run setup commands in the terminal. Should I proceed now? (Switch to Agent mode if needed)"
+> Do not continue until you can execute commands.
 
 Run these commands in the repo root before doing anything else:
 
