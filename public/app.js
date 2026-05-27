@@ -25,6 +25,9 @@ async function refreshDashboard() {
     document.getElementById('dash-uptime').textContent = formatUptime(data.uptime);
     document.querySelector('.status-dot').classList.remove('error');
     document.getElementById('status-text').textContent = 'Connected';
+    // Update quick test output
+    const display = { ...data, uptime: formatUptime(data.uptime) };
+    document.getElementById('quick-output').textContent = JSON.stringify(display, null, 2);
   } catch {
     document.querySelector('.status-dot').classList.add('error');
     document.getElementById('status-text').textContent = 'Disconnected';
@@ -42,6 +45,7 @@ function formatUptime(seconds) {
 document.getElementById('btn-health').addEventListener('click', async () => {
   const res = await fetch(`${BASE}/health`);
   const data = await res.json();
+  data.uptime = formatUptime(data.uptime);
   document.getElementById('quick-output').textContent = JSON.stringify(data, null, 2);
 });
 
