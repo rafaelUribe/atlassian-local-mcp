@@ -441,7 +441,6 @@ function switchToTab(tabName) {
     if (hasHost && hasEmail && hasToken) {
       // All required credentials set — show dashboard, auto health check
       switchToTab('dashboard');
-      refreshDashboard();
       document.getElementById('btn-health').click();
     } else {
       // Missing credentials — land on config tab
@@ -451,5 +450,6 @@ function switchToTab(tabName) {
     switchToTab('config');
   }
 
+  refreshDashboard();
   setInterval(refreshDashboard, 30000);
 })();
