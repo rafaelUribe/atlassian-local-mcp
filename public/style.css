@@ -136,6 +136,11 @@ h3 { font-size: 1rem; margin: 1rem 0 0.5rem; }
   margin-top: 0.5rem;
 }
 
+.prompt-builder { margin-top: 0.5rem; }
+.prompt-input-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+.prompt-input-row input { flex: 1; max-width: 200px; font-family: var(--mono); font-size: 0.95rem; text-transform: uppercase; }
+.prompt-preview { background: var(--surface); border: 1px solid var(--accent); border-radius: var(--radius); padding: 1rem; font-family: var(--mono); font-size: 0.85rem; white-space: pre-wrap; line-height: 1.5; color: var(--text); }
+
 /* Buttons */
 button {
   background: var(--accent);

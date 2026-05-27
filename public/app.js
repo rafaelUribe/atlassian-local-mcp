@@ -4,15 +4,29 @@ let allTools = [];
 let aiSession = null;
 let currentAiMode = 'jql';
 
-// ── Tab Navigation ──────────────────────────────────────────────────────────
+// ── Tab Navigation with URL hash routing ────────────────────────────────────
+function switchToTab(tabName) {
+  document.querySelectorAll('[data-tab]').forEach(l => l.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  const link = document.querySelector(`[data-tab="${tabName}"]`);
+  if (link) link.classList.add('active');
+  const section = document.getElementById(`tab-${tabName}`);
+  if (section) section.classList.add('active');
+  // Update URL hash without triggering hashchange
+  history.replaceState(null, '', `#${tabName}`);
+}
+
 document.querySelectorAll('[data-tab]').forEach(link => {
   link.addEventListener('click', (e) => {
     e.preventDefault();
-    document.querySelectorAll('[data-tab]').forEach(l => l.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    link.classList.add('active');
-    document.getElementById(`tab-${link.dataset.tab}`).classList.add('active');
+    switchToTab(link.dataset.tab);
   });
+});
+
+// Handle browser back/forward
+window.addEventListener('hashchange', () => {
+  const tab = location.hash.replace('#', '') || 'dashboard';
+  switchToTab(tab);
 });
 
 // ── Dashboard ───────────────────────────────────────────────────────────────
@@ -69,6 +83,31 @@ document.getElementById('btn-health').addEventListener('click', async () => {
   data.uptime = formatUptime(data.uptime);
   document.getElementById('quick-output').textContent = JSON.stringify(data, null, 2);
 });
+
+// ── Prompt Builder ──────────────────────────────────────────────────────────
+function buildPrompt(ticketId) {
+  return `Call the MCP tool "mcp_get_agent_context" to load the full workflow instructions, then initialize ticket ${ticketId}. Follow the steps in the returned context to fetch Jira details, search Confluence for related docs, set up the git branch, and create the .agents/${ticketId}.md context file.`;
+}
+
+function updatePromptPreview() {
+  const ticket = document.getElementById('ticket-input').value.trim() || 'RWD-XXXX';
+  document.getElementById('prompt-output').textContent = buildPrompt(ticket);
+}
+
+document.getElementById('ticket-input').addEventListener('input', updatePromptPreview);
+document.getElementById('btn-copy-prompt').addEventListener('click', () => {
+  const ticket = document.getElementById('ticket-input').value.trim();
+  if (!ticket) { document.getElementById('ticket-input').focus(); return; }
+  const prompt = buildPrompt(ticket);
+  navigator.clipboard.writeText(prompt).then(() => {
+    const btn = document.getElementById('btn-copy-prompt');
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => { btn.textContent = 'Copy Prompt'; }, 2000);
+  });
+});
+
+// Show default preview on load
+updatePromptPreview();
 
 // ── Configuration — Base Branches ───────────────────────────────────────────
 let baseBranches = [];
@@ -426,15 +465,6 @@ async function rpcCall(method, params) {
 }
 
 // ── Init ────────────────────────────────────────────────────────────────────
-function switchToTab(tabName) {
-  document.querySelectorAll('[data-tab]').forEach(l => l.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  const link = document.querySelector(`[data-tab="${tabName}"]`);
-  if (link) link.classList.add('active');
-  const section = document.getElementById(`tab-${tabName}`);
-  if (section) section.classList.add('active');
-}
-
 (async function init() {
   loadTools();
   initAI();
@@ -460,14 +490,28 @@ function switchToTab(tabName) {
     const hasToken = config.JIRA_TOKEN && config.JIRA_TOKEN === '••••••••';
 
     if (hasHost && hasEmail && hasToken) {
-      // All required credentials set — show dashboard, auto health check
-      switchToTab('dashboard');
+      // Configured — show all tabs, respect hash or default to dashboard
+      document.querySelectorAll('.nav-links [data-tab]').forEach(l => {
+        l.style.display = '';
+        l.style.opacity = '';
+      });
+      const hash = location.hash.replace('#', '');
+      const validTabs = ['dashboard', 'config', 'tools', 'ai'];
+      switchToTab(validTabs.includes(hash) ? hash : 'dashboard');
       document.getElementById('btn-health').click();
     } else {
-      // Missing credentials — land on config tab
+      // Not configured — hide other tabs, force config
+      document.querySelectorAll('.nav-links [data-tab]').forEach(l => {
+        if (l.dataset.tab !== 'config') {
+          l.style.display = 'none';
+        }
+      });
       switchToTab('config');
     }
   } catch {
+    document.querySelectorAll('.nav-links [data-tab]').forEach(l => {
+      if (l.dataset.tab !== 'config') l.style.display = 'none';
+    });
     switchToTab('config');
   }
 
