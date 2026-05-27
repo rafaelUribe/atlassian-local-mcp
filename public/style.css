@@ -250,12 +250,25 @@ input:focus, textarea:focus {
   border-bottom: 1px solid var(--border);
   cursor: pointer;
   font-size: 0.85rem;
-  font-family: var(--mono);
   transition: background 0.1s;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+#tools-list li strong {
+  font-family: var(--mono);
+}
+#tools-list li .tool-desc {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #tools-list li:hover { background: var(--surface2); }
 #tools-list li.active { background: var(--accent); color: white; }
+#tools-list li.active .tool-desc { color: rgba(255,255,255,0.7); }
 #tools-list li:last-child { border-bottom: none; }
 
 .tools-detail {

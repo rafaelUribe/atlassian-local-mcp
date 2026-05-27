@@ -44,11 +44,6 @@ document.getElementById('btn-health').addEventListener('click', async () => {
   document.getElementById('quick-output').textContent = JSON.stringify(data, null, 2);
 });
 
-document.getElementById('btn-list-tools').addEventListener('click', async () => {
-  const data = await rpcCall('tools/list', {});
-  document.getElementById('quick-output').textContent = data.tools.map(t => t.name).join('\n');
-});
-
 // ── Configuration — .env ────────────────────────────────────────────────────
 async function loadEnvConfig() {
   try {
@@ -111,7 +106,7 @@ async function loadTools() {
 function renderToolsList(tools) {
   const list = document.getElementById('tools-list');
   list.innerHTML = tools.map(t =>
-    `<li data-tool="${t.name}">${t.name}</li>`
+    `<li data-tool="${t.name}"><strong>${t.name}</strong><span class="tool-desc">${t.description || ''}</span></li>`
   ).join('');
   list.querySelectorAll('li').forEach(li => {
     li.addEventListener('click', () => selectTool(li.dataset.tool));
