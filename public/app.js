@@ -22,6 +22,8 @@ async function refreshDashboard() {
     const data = await res.json();
     document.getElementById('dash-url').textContent = BASE;
     document.getElementById('dash-tools').textContent = data.tools;
+    serverUptimeBase = data.uptime;
+    serverUptimeTimestamp = Date.now();
     document.getElementById('dash-uptime').textContent = formatUptime(data.uptime);
     document.querySelector('.status-dot').classList.remove('error');
     document.getElementById('status-text').textContent = 'Connected';
@@ -36,6 +38,9 @@ async function refreshDashboard() {
   updateLastCheckCounter();
 }
 
+let serverUptimeBase = 0;
+let serverUptimeTimestamp = Date.now();
+
 let lastCheckTime = Date.now();
 function updateLastCheckCounter() {
   const elapsed = Math.floor((Date.now() - lastCheckTime) / 1000);
@@ -45,6 +50,9 @@ function updateLastCheckCounter() {
   } else {
     el.textContent = `${elapsed}s ago`;
   }
+  // Live uptime counter
+  const currentUptime = serverUptimeBase + Math.floor((Date.now() - serverUptimeTimestamp) / 1000);
+  document.getElementById('dash-uptime').textContent = formatUptime(currentUptime);
 }
 setInterval(updateLastCheckCounter, 1000);
 
