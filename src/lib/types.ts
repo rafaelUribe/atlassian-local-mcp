@@ -70,6 +70,14 @@ export interface TimelineEntry {
   summary: string;
 }
 
+export interface ContextLink {
+  id: string;
+  url: string;
+  title?: string;
+  type: 'confluence' | 'jira' | 'bitbucket' | 'other';
+  addedAt: string;
+}
+
 export interface CachedTicketSummary {
   id: string;
   context: TicketContext | null;
@@ -78,4 +86,5 @@ export interface CachedTicketSummary {
   related: RelatedTicket[];
   timeline: TimelineEntry[];
   pinned: string[];
+  links: ContextLink[];
 }

@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
-  import { getHealth, getConfig, saveConfig, BASE } from '../lib/api';
+  import { getHealth, getConfig, BASE, getCachedTickets } from '../lib/api';
   import { serverConnected, configured } from '../lib/stores';
+  import type { CachedTicketSummary } from '../lib/types';
 
   const dispatch = createEventDispatcher();
 
@@ -12,10 +13,7 @@
   let uptimeText = '0s';
   let lastCheckText = 'just now';
   let quickOutput = '';
-
-  // Active tickets
-  let activeTickets: string[] = [];
-  let ticketInput = '';
+  let cachedTickets: CachedTicketSummary[] = [];
 
   // Copy button state
   let copyLabel = 'Copy';
@@ -75,26 +73,8 @@ Then confirm to the user: ✓ Local agent infrastructure ready. \`agents.md\` sa
     lastCheckTime = Date.now();
   }
 
-  async function persistTickets() {
-    try {
-      const cfg = await getConfig();
-      cfg.ACTIVE_TICKETS = activeTickets.join(',');
-      await saveConfig(cfg);
-    } catch {}
-  }
-
-  function addTicket() {
-    const val = ticketInput.trim().toUpperCase();
-    if (val && !activeTickets.includes(val)) {
-      activeTickets = [...activeTickets, val];
-      persistTickets();
-    }
-    ticketInput = '';
-  }
-
-  function removeTicket(t: string) {
-    activeTickets = activeTickets.filter(x => x !== t);
-    persistTickets();
+  async function loadTickets() {
+    try { cachedTickets = await getCachedTickets(); } catch {}
   }
 
   function copySnippet() {
@@ -109,10 +89,7 @@ Then confirm to the user: ✓ Local agent infrastructure ready. \`agents.md\` sa
 
   onMount(async () => {
     await refresh();
-    try {
-      const cfg = await getConfig();
-      activeTickets = cfg.ACTIVE_TICKETS ? cfg.ACTIVE_TICKETS.split(',').map(t => t.trim()).filter(Boolean) : [];
-    } catch {}
+    await loadTickets();
 
     ticker = setInterval(() => {
       const elapsed = Math.floor((Date.now() - lastCheckTime) / 1000);
@@ -170,25 +147,23 @@ Then confirm to the user: ✓ Local agent infrastructure ready. \`agents.md\` sa
   <p class="hint">Then run: <code>echo agents.md &gt;&gt; .git/info/exclude</code> — works with any IDE or agent.</p>
 </div>
 
-<h2>Active Tickets</h2>
-<div class="tickets-config">
-  <div class="branch-input-row">
-    <input
-      type="text"
-      bind:value={ticketInput}
-      placeholder="RWD-1234"
-      on:keydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTicket(); } }}
-    />
-    <button type="button" on:click={addTicket}>Add</button>
-  </div>
-  {#if activeTickets.length}
-    <ul class="branch-tags">
-      {#each activeTickets as t}
-        <li>
-          <span>{t}</span>
-          <button type="button" on:click={() => removeTicket(t)}>&times;</button>
-        </li>
-      {/each}
-    </ul>
-  {/if}
-</div>
+<h2>Tracked Tickets</h2>
+<p class="section-subtitle">Indexed via the <strong>Cache</strong> tab or by calling <code>mcp_index_ticket</code>. Background sync runs every 24h.</p>
+{#if cachedTickets.length === 0}
+  <p class="hint">No tickets indexed yet. Go to the <strong>Cache</strong> tab or ask the agent to run <code>mcp_index_ticket</code>.</p>
+{:else}
+  <ul class="branch-tags" style="margin-top:0.5rem">
+    {#each cachedTickets as t}
+      {@const status = t.context?.jira?.status ?? '?'}
+      {@const s = status.toLowerCase()}
+      <li style="height:auto;padding:0.35rem 0.7rem;gap:0.5rem;align-items:center">
+        <span style="font-family:var(--mono);font-weight:600;font-size:0.8rem">{t.id}</span>
+        <span class="status-badge {s.includes('progress')||s.includes('review') ? 'in-progress' : s.includes('done')||s.includes('closed') ? 'done' : ''}">{status}</span>
+        {#if t.context?.jira?.summary}
+          <span style="font-size:0.78rem;color:var(--text-dim);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{t.context.jira.summary}</span>
+        {/if}
+        <span style="font-size:0.72rem;color:var(--text-dim);margin-left:auto">{t.context?.indexedAt?.slice(0,10) ?? ''}</span>
+      </li>
+    {/each}
+  </ul>
+{/if}

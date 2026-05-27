@@ -57,3 +57,33 @@ export async function pinRepos(ticketId: string, pinnedRepos: string[]): Promise
   });
   return res.json();
 }
+
+export async function addContextLink(
+  ticketId: string,
+  link: { url: string; title?: string; type: string }
+): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/api/cache/link`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ticketId, link }),
+  });
+  return res.json();
+}
+
+export async function removeContextLink(ticketId: string, linkId: string): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/api/cache/link/remove`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ticketId, linkId }),
+  });
+  return res.json();
+}
+
+export async function removeTicketFromCache(ticketId: string): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/api/cache/ticket/remove`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ticketId }),
+  });
+  return res.json();
+}
