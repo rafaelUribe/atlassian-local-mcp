@@ -1,4 +1,4 @@
-﻿require('dotenv').config();
+﻿require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 require('./lib/config'); // validates required env vars, exits if missing
 
 const { startHttpServer, handleRequest } = require('./lib/http-server');
