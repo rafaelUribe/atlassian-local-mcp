@@ -31,7 +31,7 @@
     indexing = true;
     indexStatus = `Indexing ${id}…`;
     try {
-      await toolCall('tools/call', { name: 'mcp_index_ticket', arguments: { ticketId: id } });
+      await toolCall('mcp_index_ticket', { ticketId: id });
       indexStatus = `✓ ${id} indexed`;
       indexInput = '';
       await loadTickets();
@@ -48,7 +48,7 @@
     syncing = true;
     syncStatus = 'Syncing…';
     try {
-      const result = await toolCall<{ content: { text: string }[] }>('tools/call', { name: 'mcp_sync_active_tickets', arguments: {} });
+      const result = await toolCall<{ content: { text: string }[] }>('mcp_sync_active_tickets', {});
       syncStatus = '✓ ' + (result.content?.[0]?.text?.split('\n')[0] ?? 'Done');
       await loadTickets();
     } catch (err: unknown) {
